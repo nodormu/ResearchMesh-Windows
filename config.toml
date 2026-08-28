@@ -1,0 +1,87 @@
+# ResearchMesh-Windows, a Windows CLI Research Client for Claude — configuration.
+#
+# Non-secret settings only. MCP bearer tokens are NOT stored here: each server
+# names the environment variable that holds its token (see README.md).
+
+[claude]
+# Anthropic model to use. The CLAUDE_MODEL environment variable overrides this.
+model = "claude-sonnet-5"
+
+[mcp]
+# Set enabled = false to skip every MCP server and run with local tools only.
+enabled = false
+
+# MCP servers to connect to. Every reachable/launchable one connects and its
+# tools are merged into the single list Claude sees; one that fails prints a
+# warning and is skipped, so it doesn't stop the app. Two entry shapes:
+#
+# 1) Streamable HTTP (a server already running elsewhere, reached over the network):
+#   name       label used as the client id and in messages
+#   url        the server's Streamable HTTP endpoint
+#   token_env  optional — the environment variable holding this server's bearer
+#              token. Omit for a server that needs no auth. Never put the token
+#              itself here; this file is committed.
+#
+# 2) stdio (a local server main.py launches itself as a subprocess, talking
+#    JSON-RPC over stdin/stdout — no port, no separate process to start by hand):
+#   name       label used as the client id and in messages
+#   command    full argv as a list, e.g. ["node", "/path/to/bin.js"]
+#   env        optional table of extra environment variables for the
+#              subprocess (merged with a safe default set — PATH, HOME, etc.
+#              — by the MCP SDK; you only need to list the extras).
+#
+# `enabled` (optional, default true) works on either shape — park a server
+# without deleting its line.
+#
+# Paths and URLs are expanded before use: `~`, `$USER`, `$HOME`, `${VAR}` in
+# `command`, `url` and the *values* of `env` are substituted from the
+# environment (main.py `_expand_paths`), so nobody's username has to be baked
+# into this file. `env`'s keys are variable names and are left alone. An
+# undefined variable is left as written rather than becoming empty, so a typo
+# shows up in the startup warning instead of producing a silently wrong path.
+#
+# Order is precedence. If two servers offer the same tool name, the first
+# entry listed wins — `ToolManager._tool_owners` resolves owners by insertion
+# order — and the loser's copy is unreachable rather than reported. Keep
+# epic-official-mcp above unreal for that reason: the fork below was deduped
+# against Epic's toolsets, so Epic is the canonical owner of anything the two
+# might ever both expose.
+#
+# The absolute paths below are still machine-specific — be sure you change
+# these for your servers. Every entry is commented out by default so a fresh
+# clone starts clean; uncomment the ones you actually run and set
+# `enabled = true` above.
+servers = [
+#  { name = "n8n",    url = "http://192.168.2.12:5678/mcp-server/http", token_env = "N8N_MCP_TOKEN" }, # works
+#  { name = "alpaca", url = "http://192.168.2.12:8000/mcp" }, # works https://github.com/alpacahq/alpaca-mcp-server
+#  { name = "unity", command = ["/home/$USER/.unity/relay/relay_linux", "--mcp", "--project-path", "/run/media/invent/POD2/unity-projects/Burger_Order_Match_Stack"] },
+#  { name = "vs-code", url = "http://127.0.0.1:3000/mcp" }, # works
+#  { name = "blender", url = "http://127.0.0.1:8033/" }, # works https://projects.blender.org/lab/blender_mcp/src/branch/main/mcp
+#  { name = "epic-official-mcp", url = "http://127.0.0.1:8000/mcp" }, # works, uses epic_official_mcp.md
+  # ^ Epic's own official Unreal MCP plugin, served by the running editor —
+  #   there is no separate process to start, and nothing listens on :8000
+  #   until UE 5.8.1 is open with the plugin enabled, so expect a connect
+  #   warning and a skip otherwise. It exposes toolsets rather than a flat
+  #   tool list, and which ones appear depends on the project's enabled
+  #   plugins — so the set grows as you enable more (see the NEW markers in
+  #   epic_official_mcp.md).
+#  { name = "unreal", command = ["node", "/run/media/$USER/POD2/unreal-mcp-additional-tools/dist/bin.js", "--project-path", "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Unreal-Projects/5.8.1-Projects/Test_MCP_Project/Test_MCP_Project.uproject", "--engine-path", "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1"], env = {DOTNET_ROOT = "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/linux-x64",DOTNET_ROOT_X64 = "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/linux-x64"}},
+  # ^ works, uses unreal_management.md — this is nodormu/unreal-mcp-additional-tools
+  #   (https://github.com/nodormu/unreal-mcp-additional-tools), forked from
+  #   sam-david/unreal-mcp and deduplicated against Epic's official server so the two
+  #   form a clean union with no functional overlap — stdio transport, confirmed
+  #   present & runnable at that path (built dist/bin.js exists, `node dist/bin.js`
+  #   launches and blocks on stdin as expected for an MCP stdio server).
+  #   Needs UE 5.x open with its editor's Python Editor Script Plugin's "Enable Remote
+  #   Execution" checked (see the repo README) for most tools to actually work end-to-end;
+  #   the connection itself doesn't require that.
+  #   If you want it scoped to one Unreal project, uncomment and fill in the env line below
+  #   (or drop a .unrealmcp.json with {"projectPath": "."} in that project's directory instead —
+  #   see the repo README's "Config File" section for the full set of optional keys):
+  #   { name = "unreal", command = ["node", "/run/media/$USER/POD2/unreal-mcp-additional-tools/dist/bin.js"],
+  #     env = { UNREAL_MCP_PROJECT_PATH = "/path/to/YourProject.uproject" } },
+]
+
+# For a local stdio MCP server passed on the command line instead of listed
+# above (equivalent to a `command` entry, but only for a Python script):
+#   python main.py path/to/server.py

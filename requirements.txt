@@ -1,0 +1,62 @@
+# Runtime dependencies for Linux CLI Research Client for Claude.
+#   pip install -r requirements.txt
+#   playwright install chromium    # one-time: downloads the headless browser (pip does NOT)
+
+anthropic>=0.51.0        # keep current — the 2026 web_search/web_fetch schemas need a recent SDK
+mcp[cli]>=2.0,<3         # MCP client + Streamable HTTP transport
+# The floor is 2.0, not a preference: mcp 2.0 is a breaking major and this code
+# now uses the new API on both sides — `Server(on_list_tools=…, on_call_tool=…)`
+# in mcp_server.py (1.x's `@server.list_tools()` decorators are gone),
+# `streamable_http_client` in mcp_client.py (renamed from `streamablehttp_client`,
+# and headers now arrive via an httpx2 client rather than a `headers=` argument),
+# and snake_case model fields in core/tools.py (`input_schema`, `is_error`,
+# `mime_type`). None of it runs on 1.x. Note `pip install mcp` resolves to 2.x by
+# default now; 1.x is maintenance-only, receiving security fixes alone.
+# The `<3` matches what claude-agent-sdk declares, so the two can share a venv —
+# it pinned `mcp<2.0.0` until 0.2.140, which is the version this port needed.
+prompt-toolkit>=3.0.51   # interactive CLI REPL
+pydantic>=2.0            # imported directly in mcp_client.py (AnyUrl); also required by mcp/anthropic
+playwright>=1.40.0       # headless browser tool (core/browser.py)
+
+# --- local tool backings -------------------------------------------------
+# Each is imported lazily, inside the tool that needs it, so a missing package
+# only affects that one tool: it still gets declared to Claude and returns an
+# install hint if used. Drop any tool you don't want by removing its module
+# from core/local_tools.py MODULES.
+
+# 8.9.1 is a soft floor, not a hard one: it is where KernelManager grew
+# `transport_encryption` (8.9.0 shipped it but broke restart, which core/kernel.py
+# uses), so it is what buys CurveZMQ-encrypted sockets instead of plaintext on
+# four loopback ports. Below it the tool still runs — _start_manager() falls back
+# to IPC — but the traffic is unencrypted.
+jupyter_client>=8.9.1    # `python` — stateful IPython kernel (core/kernel.py)
+# 7.x for the kernel half of that: the curve keys in the connection file, and the
+# kernelspec metadata declaring support that jupyter_client checks before it
+# provisions them.
+ipykernel>=7.0           # the kernel that jupyter_client launches
+pexpect>=4.9             # `interactive_run` — commands that prompt (core/processes.py)
+ruamel.yaml>=0.18        # `config_edit` — YAML round-trip, comments preserved
+tomlkit>=0.12            # `config_edit` — TOML round-trip, comments preserved
+jsonpath-ng>=1.6         # `config_edit` — optional, only for '$.…' JSONPath queries
+duckdb>=0.10             # `sql_query` — SQL over CSV/Parquet/JSON (core/data.py)
+send2trash>=1.8          # `trash` — recoverable deletes (core/files.py)
+pyautogui>=0.9.54        # `computer` — screen capture + mouse/keyboard (core/computer.py)
+pillow>=10.0             # `computer` — screenshot encode/resize; also pyautogui's backend
+
+# `memory` needs nothing beyond the standard library (core/memory.py).
+
+# --- system binaries, not pip ------------------------------------------------
+# `document_convert` shells out to these:
+#   sudo apt install libreoffice   # soffice: docx/odt/xlsx/pptx <-> pdf conversion
+#   sudo apt install pandoc        # markdown -> docx/odt/pdf authoring path
+#
+# `computer` needs two apt packages that `pip install pyautogui` does not bring.
+# Both fail confusingly: without them the tool reports pyautogui as missing, or
+# capture fails, even though every package above is installed.
+#   sudo apt install python3-tk    # mouseinfo imports tkinter at module level
+#   sudo apt install scrot         # pyscreeze's only screenshot path on X11
+#
+# It also needs an X11 display. Wayland sessions ignore the XTEST input it
+# synthesises, so it refuses to run on one (see core/computer.py). For a
+# headless or Wayland machine:
+#   sudo apt install xvfb          # xvfb-run -s '-screen 0 1280x800x24' python main.py

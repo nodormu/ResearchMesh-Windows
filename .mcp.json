@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "researchmesh-windows": {
+      "command": "${HOME}/tif-env/bin/python",
+      "args": ["/run/media/${USER}/POD2/Anthropic/ResearchMesh-Windows/mcp_server.py"],
+      "env": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
+      },
+      "timeout": 900000
+    }
+  }
+}

@@ -1,0 +1,79 @@
+[project]
+name = "ResearchMesh-Windows"
+version = "0.2.0"
+description = "ResearchMesh-Windows, a Windows CLI Research Client for Claude is a command-line chat client for the Anthropic API."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"   # tomllib (used by main.py) is stdlib only from 3.11
+dependencies = [
+    "anthropic>=0.51.0",
+    "mcp[cli]>=2.0,<3",     # 2.0 is a breaking major — see requirements.txt
+    "prompt-toolkit>=3.0.51",
+    "pydantic>=2.0",
+    "playwright>=1.40.0",
+    # Local tool backings — imported lazily by the tool that needs them.
+    "jupyter_client>=8.9.1",   # CurveZMQ transport encryption — see requirements.txt
+    "ipykernel>=7.0",
+    "pexpect>=4.9",
+    "ruamel.yaml>=0.18",
+    "tomlkit>=0.12",
+    "jsonpath-ng>=1.6",
+    "duckdb>=0.10",
+    "send2trash>=1.8",
+    "pyautogui>=0.9.54",
+    "pillow>=10.0",
+]
+
+# Ruff is NOT a dependency of this project and nothing runs it automatically —
+# there is still no CI, no pre-commit hook, no test suite. This section exists
+# only so that `ruff check .`, if you happen to run it by hand, comes back clean
+# instead of returning ~39 findings that are all deliberate. The alternative was
+# a paragraph of prose telling each reader which findings to ignore, which
+# drifted every time the code was touched.
+#
+# `select` is intentionally left at ruff's defaults rather than pinned. Those
+# defaults do change between ruff versions (BLE001/S110/PLW1510 only started
+# appearing around 0.16), so a new release may surface new findings here — that
+# is the intended behaviour: you get told about the new rule, and the exemptions
+# below still hold.
+[tool.ruff.lint]
+ignore = [
+    # Blanket `except Exception`/`except BaseException` is the architecture, not
+    # an oversight: every local tool must catch anything and return an error
+    # string rather than crash the chat loop, and every shutdown/cleanup path
+    # must not be able to fail at all. Narrowing these has already caused one
+    # real bug — see "Shutdown is isolated per tool" in CLAUDE.md.
+    "BLE001",
+    # `Optional[X]` rather than `X | None`, 6× in mcp_client.py. Cosmetic; the
+    # churn isn't worth it. New code is free to use either.
+    "UP045",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# One blocking `open()` reading config.toml at the top of a standalone
+# diagnostic script. True by the letter of the rule, irrelevant in context:
+# there is no concurrent work to starve.
+"mcp_client.py" = ["ASYNC230"]
+
+# `mypy .` should come back clean, the same bar as `ruff check .`.
+#
+# It earns its place on this project specifically: the one failure mode here is
+# a dependency changing underneath the code, and mypy type-checks against the
+# *installed* packages. Every mcp 1.x -> 2.x breakage was caught by it in one
+# run, naming each renamed attribute and suggesting the new spelling — including
+# `core/tools.py`, which smoke_test.py structurally cannot reach (it never calls
+# an MCP tool) and which would otherwise have failed as an AttributeError on the
+# first real delegation, long after the upgrade.
+#
+# Left at mypy's defaults: bodies of unannotated functions are not checked, so
+# this is a floor, not a straitjacket. Annotating a function opts it in, which
+# is the right direction of travel for new code.
+[tool.mypy]
+# The optional tool backings (duckdb, playwright, pyautogui, jupyter_client,
+# pexpect, ruamel, tomlkit, jsonpath_ng, send2trash) are imported lazily inside
+# the tool that needs them, so they are legitimately absent from a bare
+# environment — CI installs only the five module-level dependencies. Without
+# this, every one of those imports is an error about a package that is *meant*
+# to be missing. Genuinely wrong imports of installed packages still fail.
+ignore_missing_imports = true
