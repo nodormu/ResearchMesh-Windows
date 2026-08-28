@@ -23,6 +23,8 @@ client = Anthropic(api_key=api_key)
 # Configuration file (config.toml) — non-secret settings.
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
 
+PROJECT_URL = "https://github.com/nodormu/ResearchMesh-Windows"
+
 
 def _load_config() -> dict:
     try:
@@ -230,7 +232,34 @@ async def main():
         await cli.run()
 
 
+def require_windows(program: str) -> None:
+    """Refuse to start anywhere else, with a reason rather than a symptom.
+
+    This is an assertion of what the project is, not a compatibility branch —
+    the distinction that matters when reading the rest of the codebase, which
+    has no platform branches at all. Without it the app starts perfectly well
+    elsewhere and then fails one tool at a time: `powershell` finds no
+    interpreter, `interactive_run` cannot import pywinpty, `computer` dies on
+    `ctypes.windll`, `document_convert` finds no LibreOffice. Every one of
+    those reads as a broken install rather than as the wrong operating system.
+
+    Deliberately in the `__main__` path only, so importing this module for
+    smoke_test.py still works everywhere.
+    """
+    if sys.platform != "win32":
+        sys.exit(
+            f"{program}: this is a Windows-only client and this is "
+            f"{sys.platform!r}.\n"
+            "Its shell is PowerShell, interactive_run drives a ConPTY "
+            "pseudo-console, and computer use calls the Win32 input APIs — "
+            "none of which have a counterpart here, and there is no supported "
+            "way to run it on another operating system.\n"
+            f"{PROJECT_URL}"
+        )
+
+
 if __name__ == "__main__":
+    require_windows("ResearchMesh-Windows")
     # No event-loop policy is set here on purpose. The upstream code forced
     # WindowsProactorEventLoopPolicy under a `sys.platform == "win32"` guard,
     # which was already a no-op — Proactor has been the default on Windows

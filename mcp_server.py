@@ -113,6 +113,25 @@ def _parse_args() -> argparse.Namespace:
 # must not consume sys.argv or steal fd 1.
 ARGS = _parse_args() if __name__ == "__main__" else None
 
+# Same refusal as main.py's `require_windows`, spelled out here instead of
+# imported because it has to happen *before* the stdout guard below, and that
+# guard has to happen before anything from core/ is imported — which importing
+# main.py would do. The duplication is two lines and buys correct ordering.
+#
+# Without it the stdio transport dies on `import msvcrt` with a bare
+# ModuleNotFoundError, and the HTTP transport starts happily and serves an
+# agent whose every tool fails, which is worse: the client sees a working
+# endpoint. Serving this from anywhere else is never the intent.
+if ARGS is not None and sys.platform != "win32":
+    sys.exit(
+        f"[{SERVER_NAME}] this is a Windows-only agent and this is "
+        f"{sys.platform!r}. Its shell is PowerShell, interactive_run drives a "
+        "ConPTY pseudo-console, and computer use calls the Win32 input APIs. "
+        "Serving it here would advertise a `delegate` tool that cannot do any "
+        "of what it claims.\n"
+        "https://github.com/nodormu/ResearchMesh-Windows"
+    )
+
 # --- stdout guard (stdio only) ----------------------------------------------
 # MUST come before importing anything from core/. On stdio, fd 1 *is* the
 # JSON-RPC channel: one stray byte and the client's parser desyncs and the

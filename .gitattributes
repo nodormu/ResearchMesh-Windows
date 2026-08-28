@@ -1,0 +1,31 @@
+# Line endings, declared rather than left to each developer's core.autocrlf.
+#
+# This matters more here than in most repositories, because the file editor
+# tool preserves whatever line endings a file already has (see the note in
+# core/claude_learned_schemas.py). Without a policy, what it preserves depends
+# on how the person who cloned the repo had git configured, and two developers
+# would produce whole-file diffs at each other.
+#
+# Text is stored and checked out as LF. Nothing on modern Windows requires
+# CRLF for these file types — Python, PowerShell, VS Code and Notepad all read
+# LF — and pinning it means the working tree matches the repository regardless
+# of git configuration.
+* text=auto eol=lf
+
+# The exceptions, and they are real ones. cmd.exe parses a batch file line by
+# line as it executes it, and mis-handles some constructs when the terminator
+# is a bare LF; PowerShell is more tolerant but conventionally CRLF, and a
+# signed script's signature block is whitespace-sensitive.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Never touched, in case any land here later.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pyd binary
+*.exe binary
+*.dll binary

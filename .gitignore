@@ -1,7 +1,21 @@
 .env
-__pycache__
-.venv
-.DS_Store
+__pycache__/
+*.pyc
+*.pyd
+
+# Virtual environments. `Scripts\` rather than `bin/` is the Windows layout;
+# both spellings of the usual directory names are listed because `py -m venv`
+# does not impose one.
+.venv/
+venv/
+env/
+
+# Windows shell and Explorer droppings.
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
 # Linter/type-checker caches. Untracked upstream via a global excludes file,
 # which a fresh clone or a fresh `git init` does not inherit.
@@ -16,8 +30,6 @@ __pycache__
 # notes to itself across sessions — local state, not source.
 memories/
 
-# Personal brainstorming notes — not part of the project
-SUPER_CHAT_BOT_ADDITIONS.md
-SUPER_CHAT_BOT_DIVIDED_INTO_AGENTS_BY_SCHOOL.md
-advisor-strategy-*
+# A `command = ["node", ...]` MCP server entry in config.toml may point at a
+# checkout that lives here. Nothing in this project installs it.
 node_modules/

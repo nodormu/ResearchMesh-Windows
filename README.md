@@ -3,7 +3,8 @@
 > *Unofficial, community-built client — not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic.*
 
 > [!NOTE]
-> **Not yet run on Windows.** A fork of
+> **Windows only.** `main.py` and `mcp_server.py` refuse to start on anything else rather
+> than half-working. **Not yet run on Windows, though.** A fork of
 > [ResearchMesh](https://github.com/nodormu/ResearchMesh) at commit `9e6959b`, rewritten for
 > Windows. `ruff`, `mypy` and `smoke_test.py` pass and CI runs on `windows-latest`, but those
 > check wiring, not behaviour — no one has sat down at a Windows box and used it yet.
@@ -62,7 +63,8 @@ local tools alone. The commented entries are kept as worked examples of both ent
 shapes — the addresses and paths in them are machine-specific, so replace them with
 your own before uncommenting and setting `enabled = true`.
 
-mcp_client.py is just a script to connect to your MCP server and pull a list of tools, be sure you change the IP address in the code.
+`python mcp_client.py` inspects whatever you configure below — it reads the same
+`config.toml` the app does, so there is nothing to edit in the script itself.
 
 ```powershell
 winget install Python.Python.3.12
@@ -149,12 +151,12 @@ enabled = true              # false skips every server; local tools still work
 #
 #   stdio (a local server main.py launches itself, no separate process to start
 #   by hand — it talks JSON-RPC over the subprocess's stdin/stdout):
-#     command    full argv as a list, e.g. ["node", "/path/to/bin.js"]
+#     command    full argv as a list, e.g. ["node", "C:/path/to/bin.js"]
 #     env        optional table of extra environment variables for it
 servers = [
   { name = "n8n",    url = "http://192.168.2.12:5678/mcp-server/http", token_env = "N8N_MCP_TOKEN" },
   { name = "alpaca", url = "http://192.168.2.12:8000/mcp" },
-  { name = "unreal", command = ["node", "$HOME/unreal-mcp/dist/bin.js"] },
+  { name = "unreal", command = ["node", "%USERPROFILE%/unreal-mcp/dist/bin.js"] },
 ]
 ```
 
@@ -162,11 +164,17 @@ A server that's unreachable (http) or fails to launch (stdio) prints a warning a
 skipped, so one being down doesn't stop the app. Tokens are never written in this file —
 only the *name* of the variable that holds them.
 
-`~`, `$USER`, `$HOME` and `${ANY_VAR}` are expanded in `command`, `url` and the *values* of
-`env`, so the checked-in config doesn't have to name your home directory or mount point.
+`~`, `%USERPROFILE%`, `%USERNAME%` and any other `%VAR%` are expanded in `command`, `url` and
+the *values* of `env`, so the checked-in config doesn't have to name your user account.
+`$VAR` and `${VAR}` work too, but use the Windows **names**: there is no `$HOME` or `$USER`
+here, and a path copied from a config written for another OS passes through unexpanded.
 (`env`'s keys are variable names and are left alone.) An undefined variable is left as
 written rather than expanding to nothing, so a typo shows up in the startup warning instead
-of becoming a silently wrong path. Absolute paths beyond that are still machine-specific —
+of becoming a silently wrong path.
+
+Backslashes need care in TOML: `"C:\Users\me"` is invalid, because `\` starts an escape
+inside a basic string. Use forward slashes (every Windows API accepts them) or a literal
+single-quoted string, `'C:\Users\me'`. Absolute paths beyond that are machine-specific —
 those you edit by hand.
 
 | Variable | Purpose |

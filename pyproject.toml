@@ -6,6 +6,21 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"   # tomllib (used by main.py) is stdlib only from 3.11
+
+# Windows-only, declared so tooling knows it rather than only the prose saying
+# so. `pywinpty` below is a Windows-only wheel and would already fail to
+# install elsewhere, but that is an accident of one dependency rather than a
+# statement of intent — this is the statement.
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: MIT License",
+    "Private :: Do Not Upload",
+]
 dependencies = [
     "anthropic>=0.51.0",
     "mcp[cli]>=2.0,<3",     # 2.0 is a breaking major — see requirements.txt
@@ -24,6 +39,14 @@ dependencies = [
     "pyautogui>=0.9.54",
     "pillow>=10.0",
 ]
+
+# Must come after every key of [project] above: a table header ends the table
+# it follows, so putting this in the middle would make `dependencies` a key of
+# `project.urls` instead. Caught by ruff's RUF200 rather than by anything at
+# runtime, since nothing here reads pyproject.toml.
+[project.urls]
+Homepage = "https://github.com/nodormu/ResearchMesh-Windows"
+Source = "https://github.com/nodormu/ResearchMesh-Windows"
 
 # Ruff is NOT a dependency of this project and nothing runs it automatically —
 # there is still no CI, no pre-commit hook, no test suite. This section exists
