@@ -1,5 +1,7 @@
+import argparse
 import asyncio
 import json
+import os
 from contextlib import AsyncExitStack
 from typing import Any, Literal, Optional
 
@@ -122,6 +124,10 @@ class MCPClient:
         result = await self.session().list_prompts()
         return result.prompts
 
+    async def list_resources(self) -> list[types.Resource]:
+        result = await self.session().list_resources()
+        return result.resources
+
     async def get_prompt(self, prompt_name, args: dict[str, str]):
         result = await self.session().get_prompt(prompt_name, args)
         return result.messages
@@ -149,32 +155,167 @@ class MCPClient:
         await self.cleanup()
 
 
-# Standalone check of every server in config.toml — connect, list tools, exit:
-#   python mcp_client.py
-# Or test one endpoint without touching the config:
-#   MCP_URL=http://host:8000/mcp MCP_TOKEN=<token> python mcp_client.py
-async def main():
-    import os
+# --- command line ----------------------------------------------------------
+# This is the inspector for this project. It exists because the obvious
+# alternative, `npx @modelcontextprotocol/inspector`, needs a separately
+# installed Node runtime to do things `MCPClient` above already implements —
+# and worse, it makes you re-enter each server's address and token by hand in a
+# browser, so what it tests is not what the app is configured to do.
+#
+# This builds every client through `main.build_client`, from the same
+# config.toml the app reads. That is the whole point: an inspector that
+# connects differently from the app can disagree with it, and this one already
+# did once — before it reused `build_client` it forced transport="http" on
+# every entry, so a stdio entry failed on a missing URL and reported `unreal`
+# unreachable while `python main.py` was talking to it perfectly well.
+_EXAMPLES = """\
+examples:
+  python mcp_client.py                          list tools on every configured server
+  python mcp_client.py -s unreal --schema       one server, with each tool's input schema
+  python mcp_client.py --prompts --resources    also list prompts and resources
+  python mcp_client.py -s n8n --call list_flows --args '{\"limit\": 5}'
+  python mcp_client.py --url http://host:8000/mcp --token-env N8N_MCP_TOKEN
+"""
+
+
+def _parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description=(
+            "Inspect the MCP servers this app is configured to use: connect, "
+            "list what they expose, and call a tool."
+        ),
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-s", "--server", metavar="NAME",
+        help="only this [mcp].servers entry, by its `name`.",
+    )
+    parser.add_argument(
+        "--url", metavar="URL",
+        help="ignore config.toml and inspect this Streamable HTTP endpoint.",
+    )
+    parser.add_argument(
+        "--token-env", metavar="VAR",
+        help="environment variable holding the bearer token for --url. The "
+             "token itself is never a command-line argument, so it stays out "
+             "of your shell history.",
+    )
+    parser.add_argument(
+        "--schema", action="store_true",
+        help="print each tool's full input schema, not just its description.",
+    )
+    parser.add_argument(
+        "--prompts", action="store_true", help="also list prompts."
+    )
+    parser.add_argument(
+        "--resources", action="store_true", help="also list resources."
+    )
+    parser.add_argument(
+        "--call", metavar="TOOL", help="call this tool and print its result."
+    )
+    parser.add_argument(
+        "--args", metavar="JSON", default="{}",
+        help="JSON object of arguments for --call (default: {}).",
+    )
+    return parser.parse_args(argv)
+
+
+def _render(result) -> str:
+    """A CallToolResult as readable text.
+
+    Content blocks are rendered rather than repr'd because the point of calling
+    a tool from here is to read what it said. `is_error` is snake_case: mcp 2.0
+    renamed these fields and kept the camelCase spellings as serialization
+    aliases only, so `isError` would silently read as missing.
+    """
+    lines = []
+    if getattr(result, "is_error", False):
+        lines.append("[tool reported an error]")
+    for block in getattr(result, "content", None) or []:
+        kind = getattr(block, "type", None)
+        if kind == "text":
+            lines.append(block.text)
+        elif kind == "image":
+            data = getattr(block, "data", "") or ""
+            lines.append(
+                f"[image: {getattr(block, 'mime_type', '?')}, "
+                f"{len(data)} base64 chars — not shown]"
+            )
+        else:
+            lines.append(f"[{kind or type(block).__name__}] {block!r}")
+    return "\n".join(lines) or "(no content)"
+
+
+async def _inspect(client: MCPClient, name: str, target: str, args) -> None:
+    async with client:
+        if args.call:
+            try:
+                call_args = json.loads(args.args)
+            except json.JSONDecodeError as e:
+                print(f"\n{name}: --args is not valid JSON ({e})")
+                return
+            print(f"\n{name}: {target}\n  calling {args.call}({call_args})")
+            result = await client.call_tool(args.call, call_args)
+            print(_render(result))
+            return
+
+        tools = await client.list_tools()
+        print(f"\n{name}: {target} — {len(tools)} tool(s)")
+        for tool in tools:
+            print(f"  - {tool.name}: {tool.description}")
+            if args.schema:
+                schema = json.dumps(tool.input_schema, indent=2)
+                print("      " + schema.replace("\n", "\n      "))
+
+        # Optional because plenty of servers implement neither, and a server
+        # that does not is entitled to answer the request with an error rather
+        # than an empty list — which should not read as the server being broken.
+        for label, fetch in (
+            ("prompt", client.list_prompts if args.prompts else None),
+            ("resource", client.list_resources if args.resources else None),
+        ):
+            if fetch is None:
+                continue
+            try:
+                items = await fetch()
+            except Exception as e:
+                print(f"  ({label}s unavailable: {type(e).__name__})")
+                continue
+            print(f"  {len(items)} {label}(s)")
+            for item in items:
+                detail = getattr(item, "description", None) or ""
+                print(f"  - {getattr(item, 'name', item)}: {detail}")
+
+
+async def main(argv=None):
+    args = _parse_args(argv)
 
     # Imported inside the function, not at module scope, because main.py imports
     # *this* module — at module scope that is a circular import. Reusing its
     # `build_client` / `_expand_paths` is the entire point: a standalone check is
     # only worth running if it builds each client exactly the way the app does.
-    # Doing it by hand here is what made this command claim `unreal` was
-    # unreachable while `python main.py` connected to it perfectly well — it
-    # forced `transport="http"` on every entry, so a stdio entry (`command`, no
-    # `url`) failed on a missing URL, and `~`/`$USER` were never expanded either.
     import main as app
 
-    override_headers = None
-    if os.getenv("MCP_URL"):
-        servers = [{"name": "MCP_URL", "url": os.getenv("MCP_URL")}]
-        if os.getenv("MCP_TOKEN"):
-            override_headers = {
-                "Authorization": f"Bearer {os.getenv('MCP_TOKEN')}"
-            }
-    else:
-        servers = app.MCP_SERVERS
+    if args.url:
+        token = os.getenv(args.token_env) if args.token_env else None
+        if args.token_env and not token:
+            print(f"[mcp] {args.token_env} is not set — connecting without auth")
+        headers = {"Authorization": f"Bearer {token}"} if token else None
+        client = MCPClient(transport="http", url=args.url, headers=headers)
+        try:
+            await _inspect(client, "--url", args.url, args)
+        except BaseException as e:
+            print(f"\n--url: {args.url} — FAILED ({type(e).__name__}: {e})")
+        return
+
+    servers = app.MCP_SERVERS
+    if args.server:
+        servers = [s for s in servers if s.get("name") == args.server]
+        if not servers:
+            names = [s.get("name") for s in app.MCP_SERVERS]
+            print(f"No [mcp].servers entry named {args.server!r}. Configured: {names}")
+            return
 
     if not servers:
         print("No servers configured under [mcp] in config.toml.")
@@ -186,6 +327,10 @@ async def main():
         # using one you expected it to.
         print("[mcp] enabled = false in config.toml — the app skips all of these.")
 
+    if args.call and len(servers) > 1:
+        print("--call needs one server; narrow it with --server NAME.")
+        return
+
     for index, server in enumerate(servers):
         name = server.get("name") or f"server_{index}"
 
@@ -196,18 +341,7 @@ async def main():
         server = app._expand_paths(server)
         target = server.get("url") or " ".join(server.get("command") or [])
         try:
-            client = (
-                MCPClient(
-                    transport="http", url=server["url"], headers=override_headers
-                )
-                if override_headers
-                else app.build_client(server, name)
-            )
-            async with client:
-                tools = await client.list_tools()
-                print(f"\n{name}: {target} — {len(tools)} tool(s)")
-                for tool in tools:
-                    print(f"  - {tool.name}: {tool.description}")
+            await _inspect(app.build_client(server, name), name, target, args)
         except BaseException as e:
             print(f"\n{name}: {target} — FAILED ({type(e).__name__}: {e})")
 

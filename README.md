@@ -573,25 +573,37 @@ in turn, lists its tools, and reports failures without starting the chat.
 </details>
 
 <details>
-<summary><b>Optional: MCP Inspector</b> — for debugging an MCP server (needs Node)</summary>
+<summary><b>Inspecting an MCP server</b> — <code>mcp_client.py</code></summary>
 
-Every line of this project is Python, and nothing here asks you to install Node. It is worth
-knowing that a Node runtime does end up running anyway, though: **Playwright bundles its own**
-— `playwright/driver/node.exe`, about 92 MB — and the browser tools drive Chromium by
-spawning it against `driver/package/cli.js`. It is vendored inside the pip package, needs no
-separate install, and is not on your PATH. `PLAYWRIGHT_NODEJS_PATH` overrides which
-interpreter is used if you need it to.
-
-That is the only Node in the picture. `npx` below is a separate, optional debugging aid and
-does need a Node you installed yourself. For hand-calling the tools your MCP endpoint exposes,
-the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) runs on demand with no
-install step:
+`mcp_client.py` is the inspector for this project. It connects to your servers, lists what
+they expose, and calls a tool — no install, no Node, no browser tab:
 
 ```powershell
-npx @modelcontextprotocol/inspector@latest
+python mcp_client.py                          # every configured server: connect, list tools
+python mcp_client.py -s unreal --schema       # one server, with each tool's input schema
+python mcp_client.py --prompts --resources    # also list prompts and resources
+python mcp_client.py -s n8n --call list_flows --args '{"limit": 5}'
+python mcp_client.py --url http://host:8000/mcp --token-env N8N_MCP_TOKEN
 ```
 
-Nothing in the repo depends on it.
+**It builds each client through the same `config.toml` and the same `build_client()` the app
+uses**, which is the reason to prefer it over the generic
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector). That one is a Node package
+run through `npx`, and it asks you to retype each server's address and token into a browser —
+so what it tests is not what the app is configured to do. This has already mattered here: an
+earlier version of this script built its own clients and forced HTTP on every entry, which
+made it report a stdio server as unreachable while `python main.py` was talking to it happily.
+
+`--token-env` names the variable holding the bearer token rather than taking the token, so it
+stays out of your shell history. A server that implements no prompts or resources says so
+rather than looking broken.
+
+Two things Node *is* still involved in, neither of which you install: **Playwright bundles its
+own runtime** — `playwright/driver/node.exe`, about 92 MB, launched against
+`driver/package/cli.js` — because its Python package is a client for a JavaScript driver. It
+is vendored inside the pip package, is not on your PATH, and `PLAYWRIGHT_NODEJS_PATH`
+overrides it. And a `command = ["node", …]` entry in `config.toml` runs whatever MCP server
+*you* point it at; that one is your dependency, not this project's.
 
 </details>
 
