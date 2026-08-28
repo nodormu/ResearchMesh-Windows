@@ -29,10 +29,24 @@ bottom-right. Declaring per-monitor awareness makes both APIs report true
 physical pixels, which is the only state in which this module's arithmetic is
 correct.
 
-This replaces the POSIX build's Wayland guard, which refused up front because
-XTEST is ignored by Wayland compositors. Windows has no equivalent refusal
-case: there is one input API, it always works, and a session that can run this
-process at all can synthesise input into it.
+**Elevation (UIPI).** Windows does have one case where synthesised input goes
+nowhere, and it is the closer analogue of the POSIX build's Wayland problem
+than the DPI note above: User Interface Privilege Isolation stops a process at
+medium integrity from sending input to a window owned by a higher-integrity
+one. If anything running as Administrator has focus — an elevated terminal,
+UAC's own consent dialog, some installers, Task Manager — clicks and keystrokes
+from here are discarded, and the screenshot afterwards looks exactly like a
+click that did nothing.
+
+It is not guarded up front the way Wayland was, because unlike Wayland it is a
+property of whichever window happens to have focus at that instant rather than
+of the session, so a refusal at tool-entry would be wrong most of the time.
+Instead `_type` checks how many events `SendInput` actually delivered and says
+so, which is the only point where Windows reports the failure at all. The mouse
+actions have no equivalent signal — `SendInput` for a click succeeds whether or
+not the target accepts it — so a click on an elevated window is genuinely
+silent. If a sequence of actions is having no visible effect, this is the first
+thing to suspect.
 """
 
 import asyncio
@@ -41,6 +55,7 @@ import ctypes
 import io
 import os
 import time
+from typing import ClassVar
 
 from core.output import image_result
 
@@ -245,9 +260,7 @@ def _dispatch(pyautogui, action: str, ti: dict):
         return f"Dragged to {ti['coordinate']}."
 
     if action == "type":
-        text = ti.get("text", "")
-        pyautogui.write(text, interval=0.01)
-        return f"Typed {len(text)} characters."
+        return _type(ti.get("text", ""))
 
     if action == "key":
         keys = _keys(ti.get("text", ""))
@@ -270,6 +283,148 @@ def _dispatch(pyautogui, action: str, ti: dict):
         return _scroll(pyautogui, ti)
 
     return f"Error: unsupported action {action!r}"
+
+
+# --- typing ---------------------------------------------------------------
+# `pyautogui.write` is not usable for this action on Windows, and fails in the
+# worst way: silently. Reading its source (_pyautogui_win.py), `keyboardMapping`
+# is populated only for `chr(32)` through `chr(127)`, and `_keyDown` begins
+# `if key not in keyboardMapping or keyboardMapping[key] is None: return`. So
+# every non-ASCII character is dropped with no error — a name with an accent, a
+# curly quote pasted out of a document, an em dash, any non-Latin script — while
+# the tool still reports the full length as typed.
+#
+# It is worse than dropping on a non-US layout. The map is built with
+# `VkKeyScanA`, which returns -1 for a character the current layout cannot
+# produce. -1 is not None, so it passes that guard, and `divmod(-1, 0x100)`
+# yields a garbage virtual-key code: the wrong character gets typed rather than
+# none. A US-layout dev box hides this entirely.
+#
+# SendInput with KEYEVENTF_UNICODE sidesteps the layout: it injects a UTF-16
+# code unit directly instead of naming a key to press. Non-BMP characters
+# (emoji) are sent as their two surrogates, which is what the API expects.
+_KEYEVENTF_KEYUP = 0x0002
+_KEYEVENTF_UNICODE = 0x0004
+_INPUT_KEYBOARD = 1
+
+
+class _MOUSEINPUT(ctypes.Structure):
+    # Declared only so the union below is the true size of a Win32 INPUT.
+    # SendInput validates the `cbSize` it is given against its own idea of
+    # that size and returns 0 — sending nothing — if they disagree, so
+    # omitting the larger union member would break every call.
+    #
+    # c_int32 rather than c_long for the Win32 LONG fields. Both are 4 bytes on
+    # Windows so this changes nothing there, but c_long follows the host's C
+    # `long` and is 8 bytes on 64-bit Linux — which made these structures
+    # compute a 48-byte INPUT when checked from the machine this port was
+    # written on, and left no way to tell a real layout error from an artefact
+    # of the checking host. Fixed-width types make the arithmetic the same
+    # everywhere, so `ctypes.sizeof(_INPUT) == 40` is a claim that can be
+    # tested off Windows.
+    _fields_ = [
+        ("dx", ctypes.c_int32),
+        ("dy", ctypes.c_int32),
+        ("mouseData", ctypes.c_uint32),
+        ("dwFlags", ctypes.c_uint32),
+        ("time", ctypes.c_uint32),
+        ("dwExtraInfo", ctypes.c_void_p),
+    ]
+
+
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", ctypes.c_uint16),
+        ("wScan", ctypes.c_uint16),
+        ("dwFlags", ctypes.c_uint32),
+        ("time", ctypes.c_uint32),
+        ("dwExtraInfo", ctypes.c_void_p),
+    ]
+
+
+class _HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", ctypes.c_uint32),
+        ("wParamL", ctypes.c_uint16),
+        ("wParamH", ctypes.c_uint16),
+    ]
+
+
+class _INPUTUNION(ctypes.Union):
+    # Annotated ClassVar only to satisfy RUF012, which special-cases
+    # ctypes.Structure but not ctypes.Union. The value must stay a plain list;
+    # ctypes reads it at class-creation time and the annotation does not change
+    # what is assigned.
+    _fields_: ClassVar = [("mi", _MOUSEINPUT), ("ki", _KEYBDINPUT), ("hi", _HARDWAREINPUT)]
+
+
+class _INPUT(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_uint32), ("union", _INPUTUNION)]
+
+
+def _utf16_units(text: str) -> list[int]:
+    """Every UTF-16 code unit in `text` — two for anything above the BMP.
+
+    SendInput's unicode path carries one UTF-16 unit per event, so an emoji is
+    delivered as its high and low surrogate in sequence. Encoding the whole
+    string at once and walking it in pairs gets that for free.
+    """
+    encoded = text.encode("utf-16-le")
+    return [
+        int.from_bytes(encoded[i : i + 2], "little")
+        for i in range(0, len(encoded), 2)
+    ]
+
+
+def _unicode_events(text: str) -> list:
+    """A keydown/keyup INPUT pair per UTF-16 code unit, in order."""
+    events = []
+    for code_unit in _utf16_units(text):
+        for flags in (_KEYEVENTF_UNICODE, _KEYEVENTF_UNICODE | _KEYEVENTF_KEYUP):
+            events.append(
+                _INPUT(
+                    type=_INPUT_KEYBOARD,
+                    union=_INPUTUNION(
+                        ki=_KEYBDINPUT(
+                            wVk=0,
+                            wScan=code_unit,
+                            dwFlags=flags,
+                            time=0,
+                            dwExtraInfo=None,
+                        )
+                    ),
+                )
+            )
+    return events
+
+
+def _type(text: str) -> str:
+    if not text:
+        return "Typed 0 characters."
+    events = _unicode_events(text)
+    array = (_INPUT * len(events))(*events)
+    send_input = ctypes.windll.user32.SendInput
+    # Declared rather than left to ctypes' defaults: the middle argument is a
+    # pointer, and an undeclared pointer argument is passed as a C int, which
+    # truncates it on 64-bit Windows.
+    send_input.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_int]
+    send_input.restype = ctypes.c_uint32
+    sent = send_input(len(events), ctypes.byref(array), ctypes.sizeof(_INPUT))
+    if sent == len(events):
+        return f"Typed {len(text)} characters."
+    # Partial or zero delivery. The usual cause is UIPI: a process at medium
+    # integrity cannot inject input into a window owned by an elevated one, and
+    # SendInput reports that by silently delivering fewer events rather than
+    # failing loudly. Say so instead of claiming success — this is the one
+    # Windows equivalent of the POSIX build's "clicking into the void", and it
+    # applies to every action here, not just typing.
+    return (
+        f"Error: typed only {sent} of {len(events)} key events. The usual cause "
+        "is a focused window running as Administrator: Windows blocks input "
+        "from a non-elevated process into an elevated one (UIPI), silently. "
+        "Click a non-elevated window first, or restart this client elevated if "
+        "the target genuinely requires it."
+    )
 
 
 def _click(pyautogui, action: str, ti: dict) -> str:
