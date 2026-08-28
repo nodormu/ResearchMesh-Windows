@@ -13,7 +13,12 @@ from core.cli import CliApp
 from mcp_client import MCPClient
 
 # Anthropic Config
-api_key = os.getenv("ANTHROPIC_API_KEY") # api key is in .bashrc file, which is why this is here
+# Read from the environment; set it with `setx ANTHROPIC_API_KEY ...` (persists
+# to the user environment, but only for shells started afterwards) or
+# `$env:ANTHROPIC_API_KEY = '...'` for the current PowerShell session. Kept as an
+# explicit reference even though core/claude.py constructs its own Anthropic()
+# that reads the same variable.
+api_key = os.getenv("ANTHROPIC_API_KEY")
 client = Anthropic(api_key=api_key)
 # Configuration file (config.toml) — non-secret settings.
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
@@ -47,11 +52,17 @@ def _expand(value):
     and dicts.
 
     config.toml is plain TOML and `tomllib` does no substitution of its own, so
-    without this a path like `/home/$USER/...` would be handed to the
+    without this a path like `C:/Users/$USERNAME/...` would be handed to the
     subprocess literally. An undefined variable is left as-is (that is
     `expandvars`' behaviour, not an accident) so a typo shows up verbatim in
     the "could not reach/launch" message instead of silently collapsing to a
-    path that starts with `/home//`.
+    path with an empty segment in the middle.
+
+    On Windows `expandvars` accepts `%VAR%` as well as `$VAR`/`${VAR}`, so
+    config.toml may use either spelling. Note the variable *names* differ from
+    POSIX even though the syntax carries over: it is `$USERNAME`, not `$USER`,
+    and `$USERPROFILE`, not `$HOME`. Those two are the likely reason a path
+    copied from the upstream Linux config comes through unexpanded.
     """
     if isinstance(value, str):
         return os.path.expanduser(os.path.expandvars(value))
@@ -196,8 +207,15 @@ async def main():
 
         for i, server_script in enumerate(server_scripts):
             client_id = f"client_{i}_{server_script}"
+            # sys.executable, not "python". On Windows a bare "python" is
+            # resolved through PATH, where it usually hits one of two wrong
+            # things: the App Execution Alias that opens the Microsoft Store
+            # (a zero-byte stub that exits without running anything), or a
+            # system-wide interpreter that is not the venv this app is running
+            # in — so the server would start without the packages it needs.
+            # sys.executable is unambiguous and is correct on every platform.
             client = await stack.enter_async_context(
-                MCPClient(command="python", args=[server_script])
+                MCPClient(command=sys.executable, args=[server_script])
             )
 
             clients[client_id] = client
@@ -215,6 +233,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    # No event-loop policy is set here on purpose. The upstream code forced
+    # WindowsProactorEventLoopPolicy under a `sys.platform == "win32"` guard,
+    # which was already a no-op — Proactor has been the default on Windows
+    # since 3.8 — and is now actively wrong: `set_event_loop_policy` and the
+    # policy classes both raise DeprecationWarning on 3.14 and are slated for
+    # removal in 3.16, so keeping it buys nothing and breaks later. Proactor is
+    # what we want (Selector has no subprocess support, which the stdio MCP
+    # transport needs) and it is what `asyncio.run` already gives us.
     asyncio.run(main())

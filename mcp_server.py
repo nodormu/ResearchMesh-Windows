@@ -38,6 +38,10 @@ import os
 import sys
 from io import TextIOWrapper
 
+# Defined up here rather than beside the other module constants because the
+# stdout guard below can need it, and that has to run before any core/ import.
+SERVER_NAME = "researchmesh"
+
 # Mirrors how this app authenticates *to* its own MCP servers (config.toml's
 # `token_env`): the config names an environment variable, the variable holds the
 # token, and the token is never written into a file that gets committed. This is
@@ -116,10 +120,20 @@ ARGS = _parse_args() if __name__ == "__main__" else None
 # the model's text, tools report cleanup failures, `_report_usage` prints
 # counters), and more will be added over time, so patching call sites is a
 # losing game. Instead take fd 1 away from the process entirely: dup it for our
-# own use, then point fd 1 at stderr. Doing it at the file-descriptor level
-# rather than by reassigning `sys.stdout` also covers subprocesses that inherit
-# fd 1 without capturing it — which is what stops a downstream stdio MCP
-# server's own startup banner from corrupting the stream.
+# own use, then point fd 1 at stderr.
+#
+# On Windows that is only half the job, and the missing half is silent. Win32
+# keeps a *separate* table of standard handles from the C runtime's fd table,
+# and `os.dup2` writes only to the latter — `GetStdHandle(STD_OUTPUT_HANDLE)`
+# still returns the original pipe afterwards. `subprocess` on Windows reads
+# exactly that when a child does not redirect (`_get_handles` calls
+# `GetStdHandle` rather than inheriting fd 1), so a child would write straight
+# into the JSON-RPC channel that this guard believes it has taken away. The
+# IPython kernel is the live case: jupyter_client launches it without capturing
+# stdout, which is the same inheritance that puts ipykernel's startup warning
+# in front of the user on POSIX. `SetStdHandle` below closes that gap, and is
+# what makes the file-descriptor-level approach actually cover subprocesses
+# here the way it does on POSIX.
 #
 # Under streamable-http none of this applies: fd 1 isn't the wire, so the app's
 # prints are just ordinary server logs and are left alone.
@@ -127,6 +141,36 @@ _JSONRPC_FD: int | None = None
 if ARGS is not None and ARGS.transport == "stdio":
     _JSONRPC_FD = os.dup(1)
     os.dup2(2, 1)
+
+    # Guarded on the platform, and this is not a portability shim: it is the
+    # accurate statement of which OS needs the extra call. On POSIX the dup2
+    # above already covers subprocesses, because there fd 1 *is* what a child
+    # inherits. `msvcrt` and `ctypes.windll` also exist only on Windows, so
+    # without the guard this module cannot be imported anywhere else — which
+    # would take smoke_test.py's MCP handshake check with it, on the machine
+    # that is currently the only place the gates can be run at all.
+    if sys.platform == "win32":
+        import ctypes
+        import msvcrt
+
+        _STD_OUTPUT_HANDLE = -11
+        _kernel32 = ctypes.windll.kernel32
+        _kernel32.SetStdHandle.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+        _kernel32.SetStdHandle.restype = ctypes.c_int
+        if not _kernel32.SetStdHandle(
+            ctypes.c_uint32(_STD_OUTPUT_HANDLE & 0xFFFFFFFF),
+            ctypes.c_void_p(msvcrt.get_osfhandle(2)),
+        ):
+            # Not fatal on its own — Python-level prints are already redirected
+            # by the dup2 above, and only an uncaptured *subprocess* can still
+            # reach the wire. Worth saying, since the failure it leads to (a
+            # desynced client mid-session) gives no hint of this as the cause.
+            print(
+                f"[{SERVER_NAME}] warning: SetStdHandle failed "
+                f"(error {ctypes.get_last_error()}); a subprocess that does "
+                "not redirect its stdout could corrupt the JSON-RPC stream",
+                file=sys.stderr,
+            )
     sys.stdout = os.fdopen(1, "w", buffering=1, closefd=False)
 elif ARGS is not None:
     # Under HTTP the app's prints are the only operator-facing log, and this is
@@ -161,8 +205,6 @@ from core import local_tools
 from core.chat import Chat
 from core.claude import Claude
 
-SERVER_NAME = "researchmesh"
-
 _DELEGATE_DESCRIPTION = """\
 Hand a task to ResearchMesh, a full agent running on this machine, and get back \
 its final answer. It runs its own multi-step loop — it will use as many tools as \
@@ -171,10 +213,12 @@ single command to run.
 
 Reach for this when the task needs something you cannot do yourself:
 
-- Controlling the desktop GUI: clicking, typing into, and reading windows of \
-already-running applications via screenshots (X11 only).
-- Answering interactive prompts — sudo/ssh passwords, `[y/N]` confirmations, \
-installers, REPLs — that a plain non-interactive shell just hangs on.
+- Controlling the Windows desktop GUI: clicking, typing into, and reading \
+windows of already-running applications via screenshots.
+- Answering interactive prompts — ssh passwords, `[y/N]` confirmations, \
+winget and other installers, REPLs — that a plain non-interactive shell just \
+hangs on.
+- Running PowerShell on this machine (there is no POSIX shell here).
 - Stateful Python: a persistent IPython kernel where variables, imports and \
 loaded dataframes survive across steps of the same session.
 - Browsing the real DOM: rendering JavaScript, following links, filling and \
@@ -332,8 +376,21 @@ async def _serve_stdio() -> None:
         raise RuntimeError("stdio transport started without the duplicated fd")
     # Hand the *real* stdout (dup'd before fd 1 was pointed at stderr) to the
     # transport, so JSON-RPC still reaches the client.
+    #
+    # `newline=""` is load-bearing on Windows and does nothing on POSIX. A
+    # TextIOWrapper left at the default `newline=None` translates every "\n" it
+    # writes into `os.linesep`, which here means each JSON-RPC frame would be
+    # terminated with "\r\n". Stdio framing is one message per line, so the
+    # client reads a trailing "\r" on every single message — tolerated by some
+    # parsers, rejected by others, and a miserable thing to diagnose from the
+    # far end. Writing exactly the bytes the transport asked for avoids the
+    # question entirely.
     jsonrpc_out = anyio.wrap_file(
-        TextIOWrapper(os.fdopen(_JSONRPC_FD, "wb", buffering=0), encoding="utf-8")
+        TextIOWrapper(
+            os.fdopen(_JSONRPC_FD, "wb", buffering=0),
+            encoding="utf-8",
+            newline="",
+        )
     )
     async with stdio_server(stdout=jsonrpc_out) as (read_stream, write_stream):
         await server.run(

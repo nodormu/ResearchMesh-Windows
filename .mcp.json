@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "researchmesh-windows": {
-      "command": "${HOME}/tif-env/bin/python",
-      "args": ["/run/media/${USER}/POD2/Anthropic/ResearchMesh-Windows/mcp_server.py"],
+      "command": "${USERPROFILE}\\tif-env\\Scripts\\python.exe",
+      "args": ["${USERPROFILE}\\ResearchMesh-Windows\\mcp_server.py"],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
       },

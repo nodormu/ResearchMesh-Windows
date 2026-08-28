@@ -33,12 +33,22 @@ enabled = false
 # `enabled` (optional, default true) works on either shape — park a server
 # without deleting its line.
 #
-# Paths and URLs are expanded before use: `~`, `$USER`, `$HOME`, `${VAR}` in
+# Paths and URLs are expanded before use: `~`, `%VAR%`, `$VAR` and `${VAR}` in
 # `command`, `url` and the *values* of `env` are substituted from the
 # environment (main.py `_expand_paths`), so nobody's username has to be baked
 # into this file. `env`'s keys are variable names and are left alone. An
 # undefined variable is left as written rather than becoming empty, so a typo
 # shows up in the startup warning instead of producing a silently wrong path.
+#
+# Use the Windows variable names: `%USERNAME%` (not `$USER`) and
+# `%USERPROFILE%` (not `$HOME`). Both `%VAR%` and `$VAR` syntax work here, but
+# a `$USER`/`$HOME` copied from a Linux config names a variable that does not
+# exist on Windows and will come through unexpanded.
+#
+# Backslashes: TOML treats `\` as an escape in a basic "quoted" string, so
+# "C:\Users\me" is invalid TOML. Either use forward slashes ("C:/Users/me",
+# which every Windows API accepts) or a literal single-quoted string
+# ('C:\Users\me'). Forward slashes are used below.
 #
 # Order is precedence. If two servers offer the same tool name, the first
 # entry listed wins — `ToolManager._tool_owners` resolves owners by insertion
@@ -54,7 +64,7 @@ enabled = false
 servers = [
 #  { name = "n8n",    url = "http://192.168.2.12:5678/mcp-server/http", token_env = "N8N_MCP_TOKEN" }, # works
 #  { name = "alpaca", url = "http://192.168.2.12:8000/mcp" }, # works https://github.com/alpacahq/alpaca-mcp-server
-#  { name = "unity", command = ["/home/$USER/.unity/relay/relay_linux", "--mcp", "--project-path", "/run/media/invent/POD2/unity-projects/Burger_Order_Match_Stack"] },
+#  { name = "unity", command = ["C:/Users/%USERNAME%/.unity/relay/relay_windows.exe", "--mcp", "--project-path", "D:/unity-projects/Burger_Order_Match_Stack"] },
 #  { name = "vs-code", url = "http://127.0.0.1:3000/mcp" }, # works
 #  { name = "blender", url = "http://127.0.0.1:8033/" }, # works https://projects.blender.org/lab/blender_mcp/src/branch/main/mcp
 #  { name = "epic-official-mcp", url = "http://127.0.0.1:8000/mcp" }, # works, uses epic_official_mcp.md
@@ -65,7 +75,7 @@ servers = [
   #   tool list, and which ones appear depends on the project's enabled
   #   plugins — so the set grows as you enable more (see the NEW markers in
   #   epic_official_mcp.md).
-#  { name = "unreal", command = ["node", "/run/media/$USER/POD2/unreal-mcp-additional-tools/dist/bin.js", "--project-path", "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Unreal-Projects/5.8.1-Projects/Test_MCP_Project/Test_MCP_Project.uproject", "--engine-path", "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1"], env = {DOTNET_ROOT = "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/linux-x64",DOTNET_ROOT_X64 = "/run/media/$USER/POD2/Unreal-Engine-zip-deploys/Linux_Unreal_Engine_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/linux-x64"}},
+#  { name = "unreal", command = ["node", "D:/unreal-mcp-additional-tools/dist/bin.js", "--project-path", "D:/Unreal-Projects/5.8.1-Projects/Test_MCP_Project/Test_MCP_Project.uproject", "--engine-path", "D:/UE_5.8.1"], env = {DOTNET_ROOT = "D:/UE_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/win-x64",DOTNET_ROOT_X64 = "D:/UE_5.8.1/Engine/Binaries/ThirdParty/DotNet/10.0/win-x64"}},
   # ^ works, uses unreal_management.md — this is nodormu/unreal-mcp-additional-tools
   #   (https://github.com/nodormu/unreal-mcp-additional-tools), forked from
   #   sam-david/unreal-mcp and deduplicated against Epic's official server so the two
@@ -78,7 +88,7 @@ servers = [
   #   If you want it scoped to one Unreal project, uncomment and fill in the env line below
   #   (or drop a .unrealmcp.json with {"projectPath": "."} in that project's directory instead —
   #   see the repo README's "Config File" section for the full set of optional keys):
-  #   { name = "unreal", command = ["node", "/run/media/$USER/POD2/unreal-mcp-additional-tools/dist/bin.js"],
+  #   { name = "unreal", command = ["node", "D:/unreal-mcp-additional-tools/dist/bin.js"],
   #     env = { UNREAL_MCP_PROJECT_PATH = "/path/to/YourProject.uproject" } },
 ]
 

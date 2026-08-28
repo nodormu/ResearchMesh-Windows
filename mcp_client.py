@@ -1,6 +1,5 @@
 import asyncio
 import json
-import sys
 from contextlib import AsyncExitStack
 from typing import Any, Literal, Optional
 
@@ -214,6 +213,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    # See the note in main.py: no policy is set. Proactor is already the
+    # Windows default, and the policy API is deprecated as of 3.14.
     asyncio.run(main())
