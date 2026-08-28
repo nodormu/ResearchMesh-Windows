@@ -575,15 +575,23 @@ in turn, lists its tools, and reports failures without starting the chat.
 <details>
 <summary><b>Optional: MCP Inspector</b> — for debugging an MCP server (needs Node)</summary>
 
-This project is **pure Python; Node.js is not a dependency.** For hand-calling the tools your
-MCP endpoint exposes, the [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
-runs on demand with no install step:
+Every line of this project is Python, and nothing here asks you to install Node. It is worth
+knowing that a Node runtime does end up running anyway, though: **Playwright bundles its own**
+— `playwright/driver/node.exe`, about 92 MB — and the browser tools drive Chromium by
+spawning it against `driver/package/cli.js`. It is vendored inside the pip package, needs no
+separate install, and is not on your PATH. `PLAYWRIGHT_NODEJS_PATH` overrides which
+interpreter is used if you need it to.
+
+That is the only Node in the picture. `npx` below is a separate, optional debugging aid and
+does need a Node you installed yourself. For hand-calling the tools your MCP endpoint exposes,
+the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) runs on demand with no
+install step:
 
 ```powershell
 npx @modelcontextprotocol/inspector@latest
 ```
 
-An external debugging aid, nothing in the repo depends on it.
+Nothing in the repo depends on it.
 
 </details>
 

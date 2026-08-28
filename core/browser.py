@@ -5,6 +5,16 @@ browser page is kept alive across tool calls so multi-step flows work
 (navigate -> fill -> click -> extract). Every tool trims what it returns to
 keep responses out of firehose territory.
 
+**This tool is the one thing here that runs a Node process.** Playwright's Python
+package is a client for a driver written in JavaScript, and it vendors its own
+interpreter to run it: `playwright/driver/node.exe` (~92 MB), launched against
+`driver/package/cli.js`. So `pip install playwright` quietly brings a Node
+runtime with it — self-contained, not on PATH, and overridable with
+`PLAYWRIGHT_NODEJS_PATH`. Nothing needs installing separately, but it matters
+for two practical reasons: the process tree under this app includes a `node.exe`
+that is not the user's, and endpoint security software sometimes objects to
+exactly that.
+
 Requires:  pip install playwright  &&  playwright install chromium
 """
 
