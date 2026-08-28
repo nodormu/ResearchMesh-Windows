@@ -258,8 +258,37 @@ def require_windows(program: str) -> None:
         )
 
 
+def force_utf8_output() -> None:
+    """Make stdout/stderr UTF-8, because Windows only makes them UTF-8 sometimes.
+
+    Python writes to a real Windows console as UTF-16 and everything survives,
+    so this looks unnecessary in a terminal. The moment output is redirected —
+    `python main.py > run.log`, a pipe, a service, or an MCP client capturing
+    the child's stderr — Python switches to the process's ANSI code page
+    instead, which on most installs is cp1252.
+
+    That is not a cosmetic difference. cp1252 has no arrow, box-drawing
+    character, CJK, Greek, emoji or `≈`, and this app prints whatever Claude
+    replies with, plus `interactive_run` transcripts and kernel output. A
+    single one of those characters raises UnicodeEncodeError from inside
+    `print`, which is not somewhere the chat loop can recover — the turn dies
+    for a reason that has nothing to do with the conversation.
+
+    `errors="replace"` on top of the encoding, deliberately: it is the same
+    posture as every tool here returning an error string rather than raising.
+    Nothing the model can say should be able to kill the session, and a
+    question mark in place of one glyph beats a traceback.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        # `reconfigure` belongs to TextIOWrapper, not to the TextIO interface,
+        # and a stream someone has already replaced need not have it.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 if __name__ == "__main__":
     require_windows("ResearchMesh-Windows")
+    force_utf8_output()
     # No event-loop policy is set here on purpose. The upstream code forced
     # WindowsProactorEventLoopPolicy under a `sys.platform == "win32"` guard,
     # which was already a no-op — Proactor has been the default on Windows

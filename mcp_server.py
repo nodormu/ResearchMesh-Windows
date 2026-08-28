@@ -181,17 +181,34 @@ if ARGS is not None and ARGS.transport == "stdio":
             "redirect its stdout could corrupt the JSON-RPC stream",
             file=sys.stderr,
         )
-    sys.stdout = os.fdopen(1, "w", buffering=1, closefd=False)
+    # encoding/errors are explicit for the reason main.py's force_utf8_output
+    # spells out: fd 1 now points at stderr, which a client captures as a pipe,
+    # and a redirected stream on Windows encodes with the ANSI code page. The
+    # app prints whatever Claude replies with, so cp1252 would raise
+    # UnicodeEncodeError on the first arrow, emoji or CJK character.
+    sys.stdout = os.fdopen(
+        1, "w", buffering=1, closefd=False, encoding="utf-8", errors="replace"
+    )
 elif ARGS is not None:
     # Under HTTP the app's prints are the only operator-facing log, and this is
     # normally run as a background service with stdout redirected to a file.
     # Python block-buffers stdout when it isn't a terminal, so without this the
     # log stays empty until ~8KB accumulates, and a `kill` loses the lot —
     # including the "listening on ..." line you started it to see.
+    # UTF-8 in the same breath, and for the same reason the buffering is set:
+    # this transport is *expected* to run with output redirected, which is
+    # exactly when Windows stops using the console's UTF-16 path and encodes
+    # with the ANSI code page instead. cp1252 cannot represent an arrow, CJK or
+    # an emoji, and the app prints whatever Claude replies with — so without
+    # this, the log dies on a UnicodeEncodeError rather than recording anything.
+    #
     # `reconfigure` belongs to TextIOWrapper, not the TextIO interface, and a
-    # replaced sys.stdout need not have it — hence the narrowing check.
-    if isinstance(sys.stdout, TextIOWrapper):
-        sys.stdout.reconfigure(line_buffering=True)
+    # replaced stream need not have it — hence the narrowing check.
+    for _stream in (sys.stdout, sys.stderr):
+        if isinstance(_stream, TextIOWrapper):
+            _stream.reconfigure(
+                encoding="utf-8", errors="replace", line_buffering=True
+            )
 
 # The app must run from the repo root: config.toml is resolved relative to
 # main.py, but the `memory` tool's CLAUDE_MEMORY_DIR default ("memories") is
