@@ -9,6 +9,13 @@ name: CI
 # No secrets are used. `smoke_test.py` sets a placeholder ANTHROPIC_API_KEY,
 # which is enough to start mcp_server.py and list its tools without ever
 # reaching the Anthropic API.
+#
+# The `check` job runs on Windows because that is the only platform this fork
+# targets, and it is currently the *only* place any of this code runs on
+# Windows at all — the port was written on a Linux box and has never been
+# executed by hand on the real thing. Treat a green run here as "it imports,
+# wires up and handshakes on Windows", which is more than nothing and well
+# short of "the tools work".
 
 on:
   push:
@@ -26,7 +33,16 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Windows, because this is a Windows-only client and the gate is worth
+    # little anywhere else. Two of the checks are now genuinely platform-bound:
+    # mcp_server.py's stdout guard imports `msvcrt` and calls `SetStdHandle`
+    # (neither exists elsewhere), so the MCP handshake check can only run here;
+    # and mypy is configured with `platform = "win32"`, which on a Linux runner
+    # would be asserting something the runner cannot actually verify.
+    #
+    # This is also the only place any of this code has ever executed on the
+    # platform it targets. The port was written on a Linux box.
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
@@ -45,7 +61,7 @@ jobs:
 
       - name: Install module-level dependencies only
         # Every optional backing (playwright, duckdb, pyautogui, jupyter,
-        # pexpect, ruamel, tomlkit, jsonpath-ng, send2trash, pillow) is
+        # pywinpty, ruamel, tomlkit, jsonpath-ng, send2trash, pillow) is
         # imported *inside* the tool that needs it, so none of them are
         # required to import the app or start the MCP server. Installing just
         # these keeps CI to seconds and avoids pulling a browser binary.
@@ -53,10 +69,14 @@ jobs:
         # Keep mcp's bounds in step with requirements.txt, which explains them.
         # A runner installs fresh every time, so an unbounded range is how CI
         # ends up testing a version no developer here is running.
+        #
+        # One line rather than a wrapped one: the default shell on a Windows
+        # runner is PowerShell, where "\" is not a line continuation (it is a
+        # backtick), so the wrapped form this replaced would have run pip with
+        # a trailing backslash as an argument.
         run: |
           python -m pip install --upgrade pip
-          pip install 'anthropic>=0.51.0' 'mcp[cli]>=2.0,<3' \
-                      'prompt-toolkit>=3.0.51' 'pydantic>=2.0' anyio
+          pip install "anthropic>=0.51.0" "mcp[cli]>=2.0,<3" "prompt-toolkit>=3.0.51" "pydantic>=2.0" anyio
 
       - name: Lint
         # pyproject.toml's [tool.ruff.lint] holds the exemptions, so a clean
@@ -81,6 +101,12 @@ jobs:
 
   # Guards the one thing about this repo that is genuinely easy to get wrong
   # and impossible to notice: a real secret committed to a public repo.
+  #
+  # Stays on ubuntu-latest even though the project is Windows-only: this job
+  # greps the repository and never imports or runs the code, so the platform is
+  # irrelevant to what it checks — and it is a bash script using `git grep -E`
+  # and `set -euo pipefail`, which would need rewriting for PowerShell to prove
+  # exactly the same thing. Linux runners are also faster to start.
   secrets:
     runs-on: ubuntu-latest
     steps:

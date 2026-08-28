@@ -16,6 +16,12 @@ is the wiring that breaks silently and that nothing else catches:
 files, and (4) because the stdio server's one fatal failure mode — a stray byte
 on stdout desynchronising JSON-RPC — is invisible until a client connects.
 
+(4) only runs on Windows and is reported as a skip elsewhere: the stdout guard
+it exercises is built on `msvcrt` and `SetStdHandle`, so off Windows the server
+exits at import and the check could only ever say "Connection closed". The
+other three are platform-independent and still run everywhere, which is what
+keeps this script useful on the Linux box the port was written on.
+
 Only module-level dependencies are required (anthropic, mcp, prompt_toolkit,
 pydantic, anyio); every optional backing is imported lazily inside the tool that
 needs it, so this runs on a bare CI box.
@@ -30,6 +36,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 FAILURES: list[str] = []
+SKIPPED: list[str] = []
 
 
 def check(name: str, condition: bool, detail: str = "") -> None:
@@ -38,6 +45,16 @@ def check(name: str, condition: bool, detail: str = "") -> None:
     else:
         print(f"  FAIL  {name}{' — ' + detail if detail else ''}")
         FAILURES.append(name)
+
+
+def skip(name: str, reason: str) -> None:
+    """A check that cannot run here, as distinct from one that passed.
+
+    Printed rather than silently omitted, and counted in the summary, because
+    the failure mode of a skip is that nobody notices the coverage is gone.
+    """
+    print(f"  skip  {name} — {reason}")
+    SKIPPED.append(name)
 
 
 def check_imports() -> None:
@@ -120,6 +137,22 @@ def check_mcp_server() -> None:
     `_connect_mcp_servers`, so a CI box with no Unreal/n8n still passes.
     """
     print("mcp_server.py (stdio handshake)")
+
+    # Windows-only, and skipped rather than failed elsewhere. mcp_server.py's
+    # stdout guard imports `msvcrt` and calls `SetStdHandle` — the half of the
+    # guard that stops a subprocess writing into the JSON-RPC channel, which
+    # `os.dup2` alone does not cover on Windows. Neither exists on another
+    # platform, so the server exits at import and this check can only report
+    # "Connection closed", naming nothing. CI runs on windows-latest, which is
+    # where this check actually earns its place.
+    if sys.platform != "win32":
+        skip(
+            "handshake completes",
+            f"needs Windows (running on {sys.platform}); mcp_server.py's "
+            "stdout guard uses msvcrt/SetStdHandle",
+        )
+        return
+
     from mcp_client import MCPClient
 
     env = dict(os.environ)
@@ -246,6 +279,13 @@ def main() -> int:
     if FAILURES:
         print(f"FAILED ({len(FAILURES)}): {', '.join(FAILURES)}")
         return 1
+    if SKIPPED:
+        # Still exit 0 — a skip is "not checkable here", not a failure. Said
+        # out loud so a green run off Windows is not mistaken for full cover.
+        print(
+            f"all checks passed ({len(SKIPPED)} skipped: {', '.join(SKIPPED)})"
+        )
+        return 0
     print("all checks passed")
     return 0
 

@@ -142,35 +142,27 @@ if ARGS is not None and ARGS.transport == "stdio":
     _JSONRPC_FD = os.dup(1)
     os.dup2(2, 1)
 
-    # Guarded on the platform, and this is not a portability shim: it is the
-    # accurate statement of which OS needs the extra call. On POSIX the dup2
-    # above already covers subprocesses, because there fd 1 *is* what a child
-    # inherits. `msvcrt` and `ctypes.windll` also exist only on Windows, so
-    # without the guard this module cannot be imported anywhere else — which
-    # would take smoke_test.py's MCP handshake check with it, on the machine
-    # that is currently the only place the gates can be run at all.
-    if sys.platform == "win32":
-        import ctypes
-        import msvcrt
+    import ctypes
+    import msvcrt
 
-        _STD_OUTPUT_HANDLE = -11
-        _kernel32 = ctypes.windll.kernel32
-        _kernel32.SetStdHandle.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
-        _kernel32.SetStdHandle.restype = ctypes.c_int
-        if not _kernel32.SetStdHandle(
-            ctypes.c_uint32(_STD_OUTPUT_HANDLE & 0xFFFFFFFF),
-            ctypes.c_void_p(msvcrt.get_osfhandle(2)),
-        ):
-            # Not fatal on its own — Python-level prints are already redirected
-            # by the dup2 above, and only an uncaptured *subprocess* can still
-            # reach the wire. Worth saying, since the failure it leads to (a
-            # desynced client mid-session) gives no hint of this as the cause.
-            print(
-                f"[{SERVER_NAME}] warning: SetStdHandle failed "
-                f"(error {ctypes.get_last_error()}); a subprocess that does "
-                "not redirect its stdout could corrupt the JSON-RPC stream",
-                file=sys.stderr,
-            )
+    _STD_OUTPUT_HANDLE = -11
+    _kernel32 = ctypes.windll.kernel32
+    _kernel32.SetStdHandle.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    _kernel32.SetStdHandle.restype = ctypes.c_int
+    if not _kernel32.SetStdHandle(
+        ctypes.c_uint32(_STD_OUTPUT_HANDLE & 0xFFFFFFFF),
+        ctypes.c_void_p(msvcrt.get_osfhandle(2)),
+    ):
+        # Not fatal on its own — Python-level prints are already redirected by
+        # the dup2 above, and only an uncaptured *subprocess* can still reach
+        # the wire. Worth saying, since the failure it leads to (a desynced
+        # client mid-session) gives no hint of this as the cause.
+        print(
+            f"[{SERVER_NAME}] warning: SetStdHandle failed "
+            f"(error {ctypes.get_last_error()}); a subprocess that does not "
+            "redirect its stdout could corrupt the JSON-RPC stream",
+            file=sys.stderr,
+        )
     sys.stdout = os.fdopen(1, "w", buffering=1, closefd=False)
 elif ARGS is not None:
     # Under HTTP the app's prints are the only operator-facing log, and this is
