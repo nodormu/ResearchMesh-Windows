@@ -48,13 +48,11 @@ between calls. Chain within one call with `;` (or build a real pipeline with
 tool to reach for when state genuinely has to persist.
 
 Why `flavor` is reported rather than being an implementation detail: the two
-interpreters disagree about aliases in a way that changes behaviour silently.
-Windows PowerShell 5.1 aliases `curl` and `wget` to `Invoke-WebRequest`, whose
-arguments are nothing like the real tools', so `curl -s <url>` is a parameter
-error there. PowerShell 7 removed both aliases, and Windows 10+ ships a real
-`curl.exe`, so the same command works. `ls`, `cat`, `rm`, `cp`, `mv` and `ps`
-are aliases in both. A command that behaves differently between two machines is
-usually this.
+interpreters ship different cmdlet sets, so a script using a 7-only cmdlet
+should fail with something that names the interpreter it ran under. They also
+used to disagree about `curl`/`wget` — aliases for `Invoke-WebRequest` on 5.1,
+absent on 7 — which `_ALIAS_PRELUDE` now settles by removing them on both, so
+each resolves to the real `curl.exe` that ships with Windows 10+.
 
 Behaviour confirmed by running the tool against a real pwsh rather than assumed:
 a cmdlet error and a failing native program both give exit code 1 (a non-zero
@@ -81,21 +79,28 @@ TOOLS = [
     {
         "name": "powershell",
         "description": (
-            "Run a command in PowerShell. This is THE shell on this machine — "
-            "there is no bash tool and no POSIX shell here, so write PowerShell "
-            "(Get-ChildItem, Get-Content, Select-String, Test-Path, the object "
-            "pipeline), not sh/bash syntax. Commands like `ls | grep foo`, "
-            "`cat`, `rm -rf`, `which`, and `$(...)` substitution will fail or, "
-            "worse, hit a PowerShell alias that behaves differently than the "
-            "Unix tool of that name. Paths are native Windows paths "
-            "(C:\\Users\\...), which is also what every other tool here returns "
-            "and accepts. Prefers PowerShell 7+ (pwsh) and falls back to the "
-            "Windows PowerShell 5.1 that ships with Windows; the response says "
-            "which one ran, so a script using a 7-only cmdlet fails legibly. "
-            "Returns JSON with the interpreter, exit code, and stdout/stderr. "
-            "Each call is a fresh process: nothing persists between calls (no "
-            "variables, no cwd) — chain with ';' or a pipeline within one call, "
-            "and use the python tool when state must survive."
+            "Run a command in PowerShell on Windows. This is THE shell on this "
+            "machine and there is no POSIX shell, so write real PowerShell "
+            "cmdlets and the object pipeline. Use Get-ChildItem (not ls/dir "
+            "habits), Get-Content, Select-String, Test-Path, Remove-Item, "
+            "Copy-Item, Get-Process, Select-Object, Where-Object, ForEach-Object, "
+            "Measure-Object. The Unix-flavoured aliases PowerShell ships with "
+            "(ls, cat, rm, cp, mv, ps, kill, diff, tee, pwd, curl, wget, man, "
+            "sleep, clear, history) are REMOVED before your command runs, so "
+            "they raise 'not recognized as a name of a cmdlet' rather than "
+            "half-working — write the cmdlet. There is no grep, sed, awk, "
+            "which, touch, or `$(...)` substitution; the equivalents are "
+            "Select-String, -replace, ForEach-Object, Get-Command, New-Item, "
+            "and $(...) is a subexpression rather than command substitution. "
+            "Paths are native Windows paths (C:\\Users\\...), which is what "
+            "every other tool here returns and accepts. Prefers PowerShell 7+ "
+            "(pwsh) and falls back to the Windows PowerShell 5.1 that ships "
+            "with Windows; the response says which one ran, so a script using a "
+            "7-only cmdlet fails legibly. Returns JSON with the interpreter, "
+            "exit code, and stdout/stderr. Each call is a fresh process: "
+            "nothing persists between calls (no variables, no cwd) — chain with "
+            "';' or a pipeline within one call, and use the python tool when "
+            "state must survive."
         ),
         "input_schema": {
             "type": "object",
@@ -123,6 +128,43 @@ TOOLS = [
 _TOOL_NAMES = {t["name"] for t in TOOLS}
 _MAX_OUTPUT = 12000
 _DEFAULT_TIMEOUT = 120
+
+# Unix-flavoured aliases PowerShell defines on Windows, removed at the start of
+# every command so that Unix muscle memory fails loudly instead of half-working.
+#
+# The point is not tidiness. `ls` and `cat` are aliases, so `ls -la` and
+# `cat -n f` reach a real cmdlet and fail on the *parameter* — an error about
+# `-la` that says nothing about the actual problem, which is that this is not a
+# Unix shell. With the alias gone the error is "The term 'ls' is not recognized
+# as a name of a cmdlet", which names the real problem and is self-correcting on
+# the next turn. It also removes the 5.1-vs-7 divergence for `curl`/`wget`:
+# those are Invoke-WebRequest aliases on 5.1 and absent on 7, so dropping them
+# makes both resolve to the real curl.exe that ships with Windows 10+.
+#
+# DOS-lineage aliases are deliberately kept — `dir`, `type`, `copy`, `move`,
+# `del`, `cls`, `md`, `rd`, `echo`, `cd`, `pushd`/`popd` are Windows-standard,
+# not imports from somewhere else.
+#
+# `sort` is the one Unix-looking alias deliberately left in place, and the
+# reason is worth keeping: Windows ships a real `sort.exe`. Removing the alias
+# would not produce an error, it would silently resolve `... | sort` to a
+# line-based text sorter operating on formatted output instead of Sort-Object
+# operating on objects — a wrong answer rather than a loud failure, which is
+# the trade this project refuses everywhere else. `diff`, `tee`, `ps`, `kill`
+# and the rest have no such Windows binary, so removing them yields the clean
+# CommandNotFound.
+_UNIX_ALIASES = (
+    "ls", "cat", "rm", "cp", "mv", "ps", "kill", "man", "mount", "lp",
+    "diff", "tee", "pwd", "curl", "wget", "sleep", "clear", "history",
+)
+
+# `-Force` because the built-ins are ReadOnly; `-ErrorAction SilentlyContinue`
+# because which of these exists varies by PowerShell version and platform, and
+# removing one that was never there must not be an error.
+_ALIAS_PRELUDE = (
+    "Remove-Item -Force -ErrorAction SilentlyContinue "
+    + ",".join(f"Alias:{name}" for name in _UNIX_ALIASES)
+)
 
 # Fixed fallback locations, checked only when PATH lookup fails.
 _WIN_LEGACY_PATH = (
@@ -207,7 +249,13 @@ def _run(tool_input: dict) -> str:
         # why: shell=True on Windows would hand this "/c" instead of the
         # "-Command" PowerShell actually wants.
         result = subprocess.run(
-            [executable, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+            [
+                executable, "-NoLogo", "-NoProfile", "-NonInteractive",
+                # Newline rather than "; " to join them: the command may open
+                # with a comment or a line of its own that a leading statement
+                # separator would swallow.
+                "-Command", f"{_ALIAS_PRELUDE}\n{command}",
+            ],
             capture_output=True,
             encoding="utf-8",
             errors="replace",

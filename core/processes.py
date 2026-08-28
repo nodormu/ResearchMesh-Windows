@@ -4,7 +4,7 @@ This replaces the pexpect implementation the POSIX build used; pexpect imports
 `pty` and `termios` at module level and cannot run on Windows at all. Same
 tool, same schema, same reason to exist: the powershell tool pipes stdin
 from nowhere, so anything that asks a question mid-run (ssh host-key
-confirmation, a sudo/UAC-style prompt, an installer, a REPL) blocks until the
+confirmation, a credential prompt, an installer, a REPL) blocks until the
 timeout kills it. This spawns the program on a real ConPTY pseudo-console and
 answers its prompts from a script the model supplies up front — the Windows
 equivalent of a pty, confirmed present and working on a real Windows 10 box

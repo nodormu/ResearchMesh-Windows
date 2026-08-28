@@ -1,9 +1,12 @@
 """Comment-preserving config edits — ruamel.yaml, tomlkit, stdlib json.
 
-A `sed` line or a yaml.safe_load -> yaml.dump round-trip silently strips every
-comment, blank line, and quoting choice in the file. The configs in this project
-are mostly comment, so that is real data loss with no error message. These three
-parsers keep the document intact and change only the key asked for.
+A `(Get-Content f) -replace ... | Set-Content` round-trip, or a
+yaml.safe_load -> yaml.dump one, silently strips every comment, blank line, and
+quoting choice in the file — and the PowerShell form adds its own damage,
+rewriting the whole file's encoding and line endings on the way through. The
+configs in this project are mostly comment, so that is real data loss with no
+error message. These three parsers keep the document intact and change only the
+key asked for.
 
 Requires:  pip install ruamel.yaml tomlkit        (json needs nothing)
            pip install jsonpath-ng               (only for '$.…' queries)
@@ -23,7 +26,8 @@ TOOLS = [
             "Read or change one key in a YAML, TOML, or JSON config file WITHOUT "
             "destroying the rest of the document — comments, key order, blank "
             "lines, and quoting style all survive. Always prefer this over editing "
-            "a config with the file editor or sed, both of which routinely mangle "
+            "a config with the file editor or with PowerShell text replacement "
+            "((Get-Content) -replace | Set-Content), both of which routinely mangle "
             "comments. Address keys with a dotted path ('claude.model', "
             "'servers[0].url'); a path starting with '$' is treated as a JSONPath "
             "query (read-only)."
