@@ -47,18 +47,35 @@ between calls. Chain within one call with `;` (or build a real pipeline with
 `|`) rather than relying on state surviving to the next call. `python` is the
 tool to reach for when state genuinely has to persist.
 
+Why `flavor` is reported rather than being an implementation detail: the two
+interpreters disagree about aliases in a way that changes behaviour silently.
+Windows PowerShell 5.1 aliases `curl` and `wget` to `Invoke-WebRequest`, whose
+arguments are nothing like the real tools', so `curl -s <url>` is a parameter
+error there. PowerShell 7 removed both aliases, and Windows 10+ ships a real
+`curl.exe`, so the same command works. `ls`, `cat`, `rm`, `cp`, `mv` and `ps`
+are aliases in both. A command that behaves differently between two machines is
+usually this.
+
+Behaviour confirmed by running the tool against a real pwsh rather than assumed:
+a cmdlet error and a failing native program both give exit code 1 (a non-zero
+exit is not swallowed by the host), `-NonInteractive` makes `Read-Host` fail
+rather than block, and an unrecognised command produces an explicit "The term
+'x' is not recognized as a name of a cmdlet..." — which is what lets a
+POSIX-ism be self-correcting rather than silently wrong.
+
 Requires:  pwsh (https://github.com/PowerShell/PowerShell#get-powershell) on
 any OS, or Windows PowerShell 5.1 (ships with Windows) as a fallback there.
 """
 
 import asyncio
 import json
+import os
 import shutil
 import subprocess
 import time
 from pathlib import Path
 
-from core.output import clip
+from core.output import clip, strip_ansi
 
 TOOLS = [
     {
@@ -169,6 +186,21 @@ def _run(tool_input: dict) -> str:
         )
     executable, flavor = found
 
+    # PowerShell 7 colourises its error output with ANSI escapes *even when
+    # stdout and stderr are pipes rather than a terminal* — confirmed by running
+    # it. A one-line "command not found" arrives as several hundred bytes of
+    # `\x1b[31;1m`/`\x1b[36;1m` wrapped around the words, and a multi-line
+    # parser error is mostly escape codes by volume. All of it is context spent
+    # to say nothing, on the tool the model reaches for most.
+    #
+    # NO_COLOR suppresses it at source, which beats stripping it afterwards, and
+    # it is a broadly honoured convention so most native programs invoked inside
+    # the command respect it too. Windows PowerShell 5.1 predates both the
+    # convention and this style of colouring, and simply ignores the variable.
+    # `strip_ansi` on the way out is the backstop for whatever colours itself
+    # anyway.
+    child_env = dict(os.environ, NO_COLOR="1")
+
     started = time.monotonic()
     try:
         # Explicit argv list, not shell=True — see the module docstring for
@@ -181,6 +213,7 @@ def _run(tool_input: dict) -> str:
             errors="replace",
             timeout=timeout,
             check=False,
+            env=child_env,
         )
     except subprocess.TimeoutExpired:
         return json.dumps(
@@ -204,8 +237,8 @@ def _run(tool_input: dict) -> str:
             "interpreter": executable,
             "flavor": flavor,
             "exit_code": result.returncode,
-            "stdout": clip(result.stdout or "", _MAX_OUTPUT),
-            "stderr": clip(result.stderr or "", _MAX_OUTPUT),
+            "stdout": clip(strip_ansi(result.stdout or ""), _MAX_OUTPUT),
+            "stderr": clip(strip_ansi(result.stderr or ""), _MAX_OUTPUT),
             "seconds": round(time.monotonic() - started, 2),
         }
     )
