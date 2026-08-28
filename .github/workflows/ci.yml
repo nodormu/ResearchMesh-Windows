@@ -10,12 +10,11 @@ name: CI
 # which is enough to start mcp_server.py and list its tools without ever
 # reaching the Anthropic API.
 #
-# The `check` job runs on Windows because that is the only platform this fork
-# targets, and it is currently the *only* place any of this code runs on
-# Windows at all — the port was written on a Linux box and has never been
-# executed by hand on the real thing. Treat a green run here as "it imports,
-# wires up and handshakes on Windows", which is more than nothing and well
-# short of "the tools work".
+# Both jobs run on Windows, because that is the only platform this project
+# targets. This is also currently the only place the code runs on Windows at
+# all — it has never been executed by hand on the real thing — so treat a green
+# run as "it imports, wires up and handshakes", which is more than nothing and
+# well short of "the tools work".
 
 on:
   push:
@@ -33,15 +32,10 @@ concurrency:
 
 jobs:
   check:
-    # Windows, because this is a Windows-only client and the gate is worth
-    # little anywhere else. Two of the checks are now genuinely platform-bound:
-    # mcp_server.py's stdout guard imports `msvcrt` and calls `SetStdHandle`
-    # (neither exists elsewhere), so the MCP handshake check can only run here;
-    # and mypy is configured with `platform = "win32"`, which on a Linux runner
-    # would be asserting something the runner cannot actually verify.
-    #
-    # This is also the only place any of this code has ever executed on the
-    # platform it targets. The port was written on a Linux box.
+    # Two of these checks are genuinely platform-bound: mcp_server.py's stdout
+    # guard imports `msvcrt` and calls `SetStdHandle`, so the MCP handshake
+    # check can only run here, and mypy is configured with
+    # `platform = "win32"`.
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -102,30 +96,36 @@ jobs:
   # Guards the one thing about this repo that is genuinely easy to get wrong
   # and impossible to notice: a real secret committed to a public repo.
   #
-  # Stays on ubuntu-latest even though the project is Windows-only: this job
-  # greps the repository and never imports or runs the code, so the platform is
-  # irrelevant to what it checks — and it is a bash script using `git grep -E`
-  # and `set -euo pipefail`, which would need rewriting for PowerShell to prove
-  # exactly the same thing. Linux runners are also faster to start.
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: No literal credentials in tracked files
+        shell: pwsh
         run: |
-          set -euo pipefail
+          # `git grep` is implemented inside git rather than shelling out to a
+          # system grep, so its regexes behave the same here; only the control
+          # flow around them is PowerShell. A match means a leak, so exit code
+          # 0 is the failure case and 1 (no match) is what we want.
+
           # Anthropic keys, and a bearer token written out instead of the
           # ${VAR} placeholder that .mcp.json and config.toml are meant to use.
-          if git grep -nIE 'sk-ant-[A-Za-z0-9_-]{20,}' -- . ; then
-            echo "::error::An Anthropic API key appears to be committed."
+          git grep -nIE 'sk-ant-[A-Za-z0-9_-]{20,}' -- .
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output '::error::An Anthropic API key appears to be committed.'
             exit 1
-          fi
-          # `git grep -E` is POSIX ERE and has no lookahead, so "value that
-          # doesn't start with $" is spelled as a first character that is
-          # neither $ nor a closing quote. That passes "${ANTHROPIC_API_KEY}"
-          # and catches a pasted-in literal.
-          if git grep -nIE '"(ANTHROPIC_API_KEY|RESEARCHMESH_MCP_TOKEN)"[[:space:]]*:[[:space:]]*"[^$"][^"]{7,}"' -- '*.json' ; then
-            echo "::error::A literal token is committed; use \${VAR} instead."
+          }
+
+          # git's -E has no lookahead, so "value that doesn't start with $" is
+          # spelled as a first character that is neither $ nor a closing quote.
+          # That passes "${ANTHROPIC_API_KEY}" and catches a pasted-in literal.
+          git grep -nIE '"(ANTHROPIC_API_KEY|RESEARCHMESH_MCP_TOKEN)"[[:space:]]*:[[:space:]]*"[^$"][^"]{7,}"' -- '*.json'
+          if ($LASTEXITCODE -eq 0) {
+            # Single-quoted deliberately: in a double-quoted string PowerShell
+            # would expand ${VAR}, printing an empty name in the very message
+            # telling you to use one.
+            Write-Output '::error::A literal token is committed; use ${VAR} instead.'
             exit 1
-          fi
-          echo "no committed credentials found"
+          }
+
+          Write-Output 'no committed credentials found'

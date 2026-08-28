@@ -5,7 +5,7 @@ that hands a task to ResearchMesh, which then runs its own full agentic loop:
 all 18 local tools plus whatever `[mcp].servers` in config.toml connects to.
 Claude Code gets the finished result, not the intermediate tool traffic.
 
-**Why one tool instead of re-exporting all 18.** `bash_20250124`,
+**Why one tool instead of re-exporting all 18.**
 `memory_20250818` and `computer_20251124` are *learned* schemas — Claude is
 trained on their exact shape, and `computer` additionally needs the
 `computer-use-2025-11-24` beta header on the request that declares it. Neither
@@ -17,7 +17,7 @@ exactly as designed, and keeps `SYSTEM_PROMPT` (which explains the tools to the
 model actually calling them) in force.
 
 So the delegate is a self-contained agent, not an extension of the caller's
-toolset — the `bash`/editor overlap with Claude Code's own built-ins is the
+toolset — the shell/editor overlap with Claude Code's own built-ins is the
 point, not redundancy, and the ~30-50 tool ceiling that governs `local_tools`
 doesn't apply here because the client only ever sees one tool.
 
@@ -131,9 +131,8 @@ ARGS = _parse_args() if __name__ == "__main__" else None
 # into the JSON-RPC channel that this guard believes it has taken away. The
 # IPython kernel is the live case: jupyter_client launches it without capturing
 # stdout, which is the same inheritance that puts ipykernel's startup warning
-# in front of the user on POSIX. `SetStdHandle` below closes that gap, and is
-# what makes the file-descriptor-level approach actually cover subprocesses
-# here the way it does on POSIX.
+# in front of the user. `SetStdHandle` below closes that gap, and is what makes
+# the file-descriptor-level approach actually cover subprocesses.
 #
 # Under streamable-http none of this applies: fd 1 isn't the wire, so the app's
 # prints are just ordinary server logs and are left alone.
@@ -210,7 +209,7 @@ windows of already-running applications via screenshots.
 - Answering interactive prompts — ssh passwords, `[y/N]` confirmations, \
 winget and other installers, REPLs — that a plain non-interactive shell just \
 hangs on.
-- Running PowerShell on this machine (there is no POSIX shell here).
+- Running PowerShell on this machine.
 - Stateful Python: a persistent IPython kernel where variables, imports and \
 loaded dataframes survive across steps of the same session.
 - Browsing the real DOM: rendering JavaScript, following links, filling and \
@@ -369,7 +368,7 @@ async def _serve_stdio() -> None:
     # Hand the *real* stdout (dup'd before fd 1 was pointed at stderr) to the
     # transport, so JSON-RPC still reaches the client.
     #
-    # `newline=""` is load-bearing on Windows and does nothing on POSIX. A
+    # `newline=""` is load-bearing. A
     # TextIOWrapper left at the default `newline=None` translates every "\n" it
     # writes into `os.linesep`, which here means each JSON-RPC frame would be
     # terminated with "\r\n". Stdio framing is one message per line, so the

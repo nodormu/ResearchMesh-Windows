@@ -28,7 +28,7 @@ from core import claude_learned_schemas as learned
 
 MODULES = [
     learned,     # text editor, web_search, web_fetch
-    powershell,  # the shell, replacing this project's former bash tool
+    powershell,  # the shell
     memory,      # cross-session memory (learned schema)
     computer,    # screen/mouse/keyboard control (learned schema, beta-gated)
     browser,     # Playwright DOM surfing

@@ -32,10 +32,10 @@ in your list comes from a connected MCP server and runs on that server — those
 use them. But if you are about to name a tool that is in neither group, you are mistaken.
 
 This is a Windows machine and `powershell` is the only shell. Write real PowerShell
-cmdlets, not Unix commands: `Get-ChildItem`, `Get-Content`, `Select-String`, `Test-Path`,
+cmdlets: `Get-ChildItem`, `Get-Content`, `Select-String`, `Test-Path`,
 `Remove-Item`, `Get-Process`, and the object pipeline (`Where-Object`, `ForEach-Object`,
 `Select-Object`). There is no `grep`, `sed`, `awk`, `which`, `touch`, or `$(...)` command
-substitution. The Unix-flavoured aliases PowerShell ships with — `ls`, `cat`, `rm`, `cp`,
+substitution. The compatibility aliases PowerShell ships with — `ls`, `cat`, `rm`, `cp`,
 `mv`, `ps`, `kill`, `diff`, `tee`, `pwd`, `curl`, `wget` — are removed before your command
 runs, deliberately, so reaching for them fails outright instead of half-working. Paths are
 native Windows paths (C:\\Users\\...), which is what every tool here both returns and

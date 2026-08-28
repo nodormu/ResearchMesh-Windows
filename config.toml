@@ -40,10 +40,9 @@ enabled = false
 # undefined variable is left as written rather than becoming empty, so a typo
 # shows up in the startup warning instead of producing a silently wrong path.
 #
-# Use the Windows variable names: `%USERNAME%` (not `$USER`) and
-# `%USERPROFILE%` (not `$HOME`). Both `%VAR%` and `$VAR` syntax work here, but
-# a `$USER`/`$HOME` copied from a Linux config names a variable that does not
-# exist on Windows and will come through unexpanded.
+# Use the Windows variable names — `%USERNAME%`, `%USERPROFILE%`, `%APPDATA%`,
+# `%LOCALAPPDATA%`, `%ProgramFiles%`. Both `%VAR%` and `$VAR` syntax are
+# accepted; a name that is not set is left as written rather than emptied.
 #
 # Backslashes: TOML treats `\` as an escape in a basic "quoted" string, so
 # "C:\Users\me" is invalid TOML. Either use forward slashes ("C:/Users/me",

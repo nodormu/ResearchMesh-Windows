@@ -4,7 +4,7 @@
 
 This is not a test suite and does not pretend to be one. There is no pytest, no
 fixtures, and nothing here exercises a tool's actual behaviour (that needs
-LibreOffice, a browser, an X11 display and real API credits). What it does check
+LibreOffice, a browser, a real desktop and real API credits). What it does check
 is the wiring that breaks silently and that nothing else catches:
 
   1. every module imports at all
@@ -19,8 +19,8 @@ on stdout desynchronising JSON-RPC — is invisible until a client connects.
 (4) only runs on Windows and is reported as a skip elsewhere: the stdout guard
 it exercises is built on `msvcrt` and `SetStdHandle`, so off Windows the server
 exits at import and the check could only ever say "Connection closed". The
-other three are platform-independent and still run everywhere, which is what
-keeps this script useful on the Linux box the port was written on.
+other three do not depend on the platform, so this script stays useful
+wherever it is run.
 
 Only module-level dependencies are required (anthropic, mcp, prompt_toolkit,
 pydantic, anyio); every optional backing is imported lazily inside the tool that
@@ -87,7 +87,7 @@ def check_tool_registry() -> None:
     )
     for tool in tools:
         name = tool.get("name", "<unnamed>")
-        # The learned schemas (bash, text editor, memory, computer) carry a
+        # The learned schemas (text editor, memory, computer) carry a
         # `type` instead of a description and input_schema — Claude already
         # knows their shape, so declaring one would contradict its training.
         if "type" in tool:

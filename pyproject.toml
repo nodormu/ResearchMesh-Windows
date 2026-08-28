@@ -15,7 +15,7 @@ dependencies = [
     # Local tool backings — imported lazily by the tool that needs them.
     "jupyter_client>=8.9.1",   # CurveZMQ transport encryption — see requirements.txt
     "ipykernel>=7.0",
-    "pywinpty>=2.0",           # ConPTY; replaces the POSIX-only pexpect
+    "pywinpty>=2.0",           # ConPTY, for interactive_run
     "ruamel.yaml>=0.18",
     "tomlkit>=0.12",
     "jsonpath-ng>=1.6",
@@ -79,10 +79,8 @@ ignore = [
 ignore_missing_imports = true
 
 # This is a Windows-only client, so type-check it as Windows regardless of the
-# machine running mypy. Without this, checking from Linux reports `ctypes` has
-# no attribute `windll` (core/computer.py's DPI-awareness calls) — a false
-# positive from the checking host, not a defect in the code. It cuts the other
-# way too, and that is the real value: with it set, code that is wrong *on
-# Windows* is reported even when it happens to type-check on the developer's
-# Linux box, so the gate matches the only platform that ships.
+# machine running mypy. The value is that code which is wrong *on Windows* gets
+# reported even when it would type-check on whatever host the checker runs on,
+# so the gate matches the only platform that ships. Without it, `ctypes.windll`
+# in core/computer.py reads as a missing attribute off Windows.
 platform = "win32"

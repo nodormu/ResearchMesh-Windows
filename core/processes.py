@@ -1,63 +1,43 @@
 """Interactive processes — pywinpty/ConPTY.
 
-This replaces the pexpect implementation the POSIX build used; pexpect imports
-`pty` and `termios` at module level and cannot run on Windows at all. Same
-tool, same schema, same reason to exist: the powershell tool pipes stdin
-from nowhere, so anything that asks a question mid-run (ssh host-key
-confirmation, a credential prompt, an installer, a REPL) blocks until the
-timeout kills it. This spawns the program on a real ConPTY pseudo-console and
-answers its prompts from a script the model supplies up front — the Windows
-equivalent of a pty, confirmed present and working on a real Windows 10 box
-this session (KernelBase.dll exports CreatePseudoConsole/ClosePseudoConsole/
-ResizePseudoConsole/CreatePseudoConsoleAsUser) and exercised end to end
-through `pywinpty` (a clean prebuilt wheel, no compiler needed) via a genuine
-win32 Python: spawn, read, write, and exit-code capture all confirmed working,
-including a full expect-then-send round trip against a real prompting child
-process.
+The powershell tool pipes stdin from nowhere, so anything that asks a question
+mid-run (an ssh host-key confirmation, a credential prompt, an installer, a
+REPL) blocks until the timeout kills it. This spawns the program on a real
+ConPTY pseudo-console and answers its prompts from a script the model supplies
+up front. ConPTY is confirmed present and working on Windows 10
+(KernelBase.dll exports CreatePseudoConsole/ClosePseudoConsole/
+ResizePseudoConsole/CreatePseudoConsoleAsUser) and exercised end to end through
+`pywinpty` (a clean prebuilt wheel, no compiler needed): spawn, read, write and
+exit-code capture all confirmed, including a full expect-then-send round trip
+against a real prompting child process.
 
-Three real platform differences from the POSIX version, not oversights:
-  * `pywinpty`'s `read()` is blocking-only — confirmed live, an initial
-    attempt at a non-blocking read raised TypeError immediately. There is no
-    equivalent of pexpect's own built-in `expect(pattern, timeout=...)>`, so
-    the read has to run on its own thread feeding a queue, with this module's
-    own loop polling that queue against a deadline to get the same
-    timeout-per-step behaviour pexpect gives for free.
-  * No POSIX signal concept on Windows, so `signal_status` in the response is
-    always None here — `exit_status` alone is the whole story.
-  * **`secret: true` is weaker here than on POSIX, and this is a real platform
-    limit, not an oversight.** The POSIX version spawned pexpect with
-    `echo=False`,
-    which works because POSIX ttys let the controlling side turn off the
-    pty's own echo via termios, *independent of what the child program does*
-    — confirmed by reading pexpect's own source: with echo left on, sending
-    to a plain `cat` shows up twice (once from the tty's own echo, once from
-    `cat` echoing it back itself), and `echo=False` suppresses only the
-    former. ConPTY has no equivalent: it's deliberately built to behave
-    exactly like a real console from the child's point of view, where the
-    *child* owns its own echo setting (`SetConsoleMode`/`ENABLE_ECHO_INPUT`),
-    not something the host side can override out from under it. In practice
-    this rarely matters, because real secret prompts (an actual `ssh`
-    password prompt, PowerShell's `Read-Host -AsSecureString`) already
-    suppress their own echo before reading — same as POSIX ultimately relies
-    on well-behaved programs for too, just with an extra POSIX-only safety
-    net Windows doesn't have. Caught live in this session's own testing with
-    a plain `input()` child (which — deliberately, to surface exactly this —
-    does not suppress echo): the sent secret genuinely appeared in the raw
-    ConPTY output. Mitigated here as defense-in-depth, not a guarantee: every
-    literal `send` value from a `secret: true` step is scrubbed out of
-    incoming buffer content the moment it arrives, before it can reach either
-    pattern-matching or the transcript.
+Three properties of ConPTY that shape the code, none of them oversights:
+  * `pywinpty`'s `read()` is blocking-only — confirmed live, an attempt at a
+    non-blocking read raised TypeError immediately — and takes no timeout. So
+    the read runs on its own thread feeding a queue, and this module's loop
+    polls that queue against a deadline to get timeout-per-step behaviour.
+  * Windows has no signal concept for a child like this, so `signal_status` in
+    the response is always None — `exit_status` alone is the whole story.
+  * **`secret: true` protects the transcript, not the console.** ConPTY is
+    deliberately built to behave exactly like a real console from the child's
+    point of view, which means the *child* owns its echo setting
+    (`SetConsoleMode`/`ENABLE_ECHO_INPUT`) and the host side cannot turn it off
+    out from under it. In practice this rarely matters, because real secret
+    prompts — an `ssh` password prompt, `Read-Host -AsSecureString` — suppress
+    their own echo before reading. It was confirmed to matter with a child that
+    deliberately does not (a plain `input()`): the sent secret genuinely
+    appeared in the raw ConPTY output. Mitigated as defence in depth rather
+    than guaranteed: every literal `send` value from a `secret: true` step is
+    scrubbed out of incoming buffer content the moment it arrives, before it
+    can reach either pattern-matching or the transcript.
 
-Command wrapping mirrors bash's role exactly: `["cmd.exe", "/c", command]`,
-the same relationship `["bash", "-c", command]` has to the POSIX version —
-deliberately not `pwsh`/`powershell.exe`, to avoid re-introducing the
-`-Command` quoting complexity already dealt with in core/powershell.py. Ask
-for PowerShell (`pwsh`, `powershell.exe`) as the command itself if that's what
-a given task actually needs; cmd.exe is only the thin wrapper.
+Commands are wrapped as `["cmd.exe", "/c", command]` — deliberately not
+`pwsh`/`powershell.exe`, to avoid re-introducing the `-Command` quoting
+complexity already dealt with in core/powershell.py. Ask for PowerShell as the
+command itself if a given task needs it; cmd.exe is only the thin wrapper.
 
-No ConPTY resize handling: the POSIX version doesn't expose terminal
-resizing either (this is a scripted expect/send tool, not a live
-human-facing terminal), so there is nothing to match here.
+No ConPTY resize handling: this is a scripted expect/send tool, not a live
+human-facing terminal, so there is no window for the caller to resize.
 
 **Know what the transport is, because this tool handles passwords.** pywinpty
 does not hand pty output back in-process: `PtyProcess.__init__` opens a
@@ -178,9 +158,8 @@ class _Reader:
 
     pywinpty's read() blocks until there is data or the pty closes — there is
     no timeout parameter to give it, so a caller that wants to honour a
-    per-step deadline (as pexpect's own expect(timeout=...) does natively)
-    has to poll a queue instead of calling read() directly on the main
-    thread. `None` on the queue is the EOF sentinel.
+    per-step deadline has to poll a queue instead of calling read() directly
+    on the main thread. `None` on the queue is the EOF sentinel.
     """
 
     def __init__(self, proc):
@@ -252,8 +231,8 @@ def _run(tool_input: dict) -> str:
     timeout = int(tool_input.get("timeout") or _DEFAULT_TIMEOUT)
 
     try:
-        # cmd.exe /c plays bash -c's role: a thin wrapper so `command` can use
-        # native shell syntax, not a hard requirement to use cmd.exe features.
+        # cmd.exe /c is a thin wrapper so `command` can use shell syntax; it
+        # is not a requirement to use cmd.exe-specific features.
         proc = winpty.PtyProcess.spawn(["cmd.exe", "/c", command])
     except Exception as e:
         return json.dumps({"error": f"could not spawn command: {e}"})
@@ -279,10 +258,8 @@ def _run(tool_input: dict) -> str:
         """Waits for `pattern` in the accumulating buffer, or the deadline.
 
         Returns ("matched"|"eof"|"timeout", match) — the three outcomes the
-        step loop below needs to tell apart (a pexpect.expect() call collapses
-        the first and last into a return value plus an exception for the
-        second; spelling all three out here since there's no library doing it
-        for us). The match object is handed back rather than the caller
+        step loop below needs to tell apart; there is no library doing it for
+        us, so all three are spelled out. The match object is handed back rather than the caller
         re-running `search`: it is the same result by construction, and
         returning it means there is no second call whose None case has to be
         reasoned about.
@@ -315,7 +292,7 @@ def _run(tool_input: dict) -> str:
             if outcome == "eof" or match is None:
                 # The program finished before this prompt ever appeared —
                 # not a timeout, just an early exit. Same distinction
-                # the POSIX version's pexpect.EOF branch made.
+                # an early exit does.
                 timed_out_at = None
                 transcript.append(buffer)
                 buffer = ""
@@ -334,8 +311,7 @@ def _run(tool_input: dict) -> str:
                 # show this (nothing reads again), which is exactly why it
                 # survives a quick round-trip test; a two-step script answers
                 # its second prompt with "" before the model's real answer
-                # arrives. This is the POSIX version's `sendline` equivalent,
-                # where pexpect sends "\n" because a POSIX pty maps it.
+                # arrives.
                 proc.write(reply + "\r")
             except EOFError:
                 # The pty closed between matching the prompt and answering it
@@ -351,7 +327,7 @@ def _run(tool_input: dict) -> str:
             matched += 1
 
         # Drain whatever the program prints after the last answer, mirroring
-        # the POSIX version's final child.expect(pexpect.EOF) drain.
+        # the drain that follows the last answered prompt.
         drain_deadline = time.monotonic() + timeout
         while not reader.eof and time.monotonic() < drain_deadline:
             chunk = reader.get(min(drain_deadline - time.monotonic(), _POLL_INTERVAL))
@@ -389,7 +365,7 @@ def _run(tool_input: dict) -> str:
             "steps_matched": matched,
             "steps_total": len(steps),
             "exit_status": proc.exitstatus,
-            "signal_status": None,  # no POSIX signal concept on Windows
+            "signal_status": None,  # Windows has no signal status for a child
             "timed_out_waiting_for": timed_out_at,
         }
     )

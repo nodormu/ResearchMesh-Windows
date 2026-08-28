@@ -1,40 +1,28 @@
 """PowerShell — the shell tool for this client.
 
-This replaces the `bash` tool the POSIX build declared (Anthropic's learned
-`bash_20250124` schema), rather than sitting alongside it. Claude is trained to
-emit POSIX shell for that tool name, so there is no honest way to keep the name
-and run a different interpreter underneath — `ls | grep foo` would simply
-arrive at something with neither. Keeping real bash was the alternative, and
-would have meant depending on Git for Windows and living with its MinGW
-filesystem view (`/c/Users/...`) disagreeing with the native paths every other
-tool here emits and accepts. See core/claude_learned_schemas.py, where the
-reasoning is recorded next to the gap bash left.
+This is a custom schema rather than one of Anthropic's built-in ones, and the
+description below carries more of the contract than a built-in tool's would
+need to: it is what teaches the model to write cmdlets and the object pipeline
+instead of whatever it would otherwise reach for.
 
-The cost of the swap is that this is a custom schema: Claude learns it from
-the description below rather than from training, which is why that description
-is more explicit about the contract than a learned tool's would need to be.
-
-Interpreter resolution, cheapest-and-most-portable first:
-  1. `pwsh` on PATH — PowerShell 7+ (Core). Genuinely cross-platform: this is
-     the same binary whether it's Linux, macOS, or Windows, so this is checked
-     everywhere, not just under a win32 guard.
-  2. Windows only: legacy Windows PowerShell 5.1 (`powershell.exe`), first via
-     PATH, then its fixed install location. Every real Windows box ships this
-     even when PS7 was never installed separately, so it is a reasonable
-     degrade rather than an error — the two dialects are close enough that
-     most scripts run unmodified, and the response reports which one actually
-     ran (`flavor`) so a script relying on a PS7-only cmdlet fails legibly
-     instead of silently.
-  Neither existing means no PowerShell is installed; the response says so and
-  names the two install paths rather than guessing further.
+Interpreter resolution, newest first:
+  1. `pwsh` on PATH — PowerShell 7+.
+  2. Windows PowerShell 5.1 (`powershell.exe`), first via PATH, then its fixed
+     System32 location. Every Windows box ships this even when 7 was never
+     installed, so it is a reasonable degrade rather than an error — the two
+     are close enough that most scripts run unmodified, and the response
+     reports which one actually ran (`flavor`) so a script relying on a
+     7-only cmdlet fails legibly instead of silently.
+  Neither existing means PATH is broken rather than that PowerShell is
+  missing, and the error says so.
 
 Process invocation uses an explicit argv list
 (`[executable, "-NoProfile", "-NonInteractive", "-Command", command]`), never
-`shell=True`. This matters more than it looks — on Windows, `subprocess` with
-`shell=True` hard-codes `<executable> /c "<args>"` (cmd.exe's flag) onto
-whatever `executable=` is set to, so it would hand PowerShell a `/c` it
-doesn't understand instead of the `-Command` it actually wants. Passing the
-argv list ourselves sidesteps that entirely, on every OS.
+`shell=True`. This matters more than it looks: `subprocess` with `shell=True`
+hard-codes `<executable> /c "<args>"` — cmd.exe's flag — onto whatever
+`executable=` is set to, so it would hand PowerShell a `/c` it does not
+understand instead of the `-Command` it wants. Passing the argv list ourselves
+sidesteps that entirely.
 
 `-NoProfile` skips the user's profile script (faster, and deterministic
 regardless of whatever a profile happens to customize). `-NonInteractive`
@@ -58,11 +46,12 @@ Behaviour confirmed by running the tool against a real pwsh rather than assumed:
 a cmdlet error and a failing native program both give exit code 1 (a non-zero
 exit is not swallowed by the host), `-NonInteractive` makes `Read-Host` fail
 rather than block, and an unrecognised command produces an explicit "The term
-'x' is not recognized as a name of a cmdlet..." — which is what lets a
-POSIX-ism be self-correcting rather than silently wrong.
+'x' is not recognized as a name of a cmdlet..." — which is what makes a wrong
+reach self-correcting rather than silently wrong.
 
-Requires:  pwsh (https://github.com/PowerShell/PowerShell#get-powershell) on
-any OS, or Windows PowerShell 5.1 (ships with Windows) as a fallback there.
+Requires:  nothing to install — Windows PowerShell 5.1 ships with the OS.
+           pwsh (PowerShell 7+) is preferred if present:
+           https://github.com/PowerShell/PowerShell#get-powershell
 """
 
 import asyncio
@@ -79,12 +68,11 @@ TOOLS = [
     {
         "name": "powershell",
         "description": (
-            "Run a command in PowerShell on Windows. This is THE shell on this "
-            "machine and there is no POSIX shell, so write real PowerShell "
-            "cmdlets and the object pipeline. Use Get-ChildItem (not ls/dir "
-            "habits), Get-Content, Select-String, Test-Path, Remove-Item, "
+            "Run a command in PowerShell. This is the shell on this machine, so "
+            "write real PowerShell cmdlets and use the object pipeline. "
+            "Get-ChildItem, Get-Content, Select-String, Test-Path, Remove-Item, "
             "Copy-Item, Get-Process, Select-Object, Where-Object, ForEach-Object, "
-            "Measure-Object. The Unix-flavoured aliases PowerShell ships with "
+            "Measure-Object. The compatibility aliases PowerShell ships with "
             "(ls, cat, rm, cp, mv, ps, kill, diff, tee, pwd, curl, wget, man, "
             "sleep, clear, history) are REMOVED before your command runs, so "
             "they raise 'not recognized as a name of a cmdlet' rather than "
@@ -129,15 +117,16 @@ _TOOL_NAMES = {t["name"] for t in TOOLS}
 _MAX_OUTPUT = 12000
 _DEFAULT_TIMEOUT = 120
 
-# Unix-flavoured aliases PowerShell defines on Windows, removed at the start of
-# every command so that Unix muscle memory fails loudly instead of half-working.
+# Aliases PowerShell carries for compatibility with other shells, removed at the
+# start of every command so that reaching for one fails loudly rather than
+# half-working.
 #
 # The point is not tidiness. `ls` and `cat` are aliases, so `ls -la` and
 # `cat -n f` reach a real cmdlet and fail on the *parameter* — an error about
-# `-la` that says nothing about the actual problem, which is that this is not a
-# Unix shell. With the alias gone the error is "The term 'ls' is not recognized
-# as a name of a cmdlet", which names the real problem and is self-correcting on
-# the next turn. It also removes the 5.1-vs-7 divergence for `curl`/`wget`:
+# `-la`, which says nothing about the actual problem: that the command should
+# have been `Get-ChildItem -Force` in the first place. With the alias gone the
+# error is "The term 'ls' is not recognized as a name of a cmdlet", which names
+# the real problem and is self-correcting on the next turn. It also removes the 5.1-vs-7 divergence for `curl`/`wget`:
 # those are Invoke-WebRequest aliases on 5.1 and absent on 7, so dropping them
 # makes both resolve to the real curl.exe that ships with Windows 10+.
 #
@@ -145,7 +134,7 @@ _DEFAULT_TIMEOUT = 120
 # `del`, `cls`, `md`, `rd`, `echo`, `cd`, `pushd`/`popd` are Windows-standard,
 # not imports from somewhere else.
 #
-# `sort` is the one Unix-looking alias deliberately left in place, and the
+# `sort` is the one such alias deliberately left in place, and the
 # reason is worth keeping: Windows ships a real `sort.exe`. Removing the alias
 # would not produce an error, it would silently resolve `... | sort` to a
 # line-based text sorter operating on formatted output instead of Sort-Object
@@ -153,7 +142,7 @@ _DEFAULT_TIMEOUT = 120
 # the trade this project refuses everywhere else. `diff`, `tee`, `ps`, `kill`
 # and the rest have no such Windows binary, so removing them yields the clean
 # CommandNotFound.
-_UNIX_ALIASES = (
+_REMOVED_ALIASES = (
     "ls", "cat", "rm", "cp", "mv", "ps", "kill", "man", "mount", "lp",
     "diff", "tee", "pwd", "curl", "wget", "sleep", "clear", "history",
 )
@@ -163,7 +152,7 @@ _UNIX_ALIASES = (
 # removing one that was never there must not be an error.
 _ALIAS_PRELUDE = (
     "Remove-Item -Force -ErrorAction SilentlyContinue "
-    + ",".join(f"Alias:{name}" for name in _UNIX_ALIASES)
+    + ",".join(f"Alias:{name}" for name in _REMOVED_ALIASES)
 )
 
 # Fixed fallback locations, checked only when PATH lookup fails.

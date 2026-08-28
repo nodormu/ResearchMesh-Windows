@@ -2,27 +2,26 @@
 
 > *Unofficial, community-built client — not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic.*
 
-> [!WARNING]
-> **Port in progress: `core/` is Windows-only now, but this README is not yet rewritten.**
-> A fork of [ResearchMesh](https://github.com/nodormu/ResearchMesh) at commit `9e6959b`.
-> Everything below still describes the Linux original and now contradicts the code in
-> several places — most importantly, **there is no `bash` tool any more**; `powershell`
-> replaces it. The setup steps below are still `apt`, and the `computer`/`interactive_run`
-> sections still describe X11 and `pexpect`. The `core/` module docstrings are accurate;
-> this file is not. Nothing has been run on Windows yet.
+> [!NOTE]
+> **Not yet run on Windows.** A fork of
+> [ResearchMesh](https://github.com/nodormu/ResearchMesh) at commit `9e6959b`, rewritten for
+> Windows. `ruff`, `mypy` and `smoke_test.py` pass and CI runs on `windows-latest`, but those
+> check wiring, not behaviour — no one has sat down at a Windows box and used it yet.
+> `document_convert`, `interactive_run` and `computer` are the three most likely to need a
+> second pass.
 
-                    ┌── /think
-                    │
-                    ├── Bash / Linux
-                    ├── Filesystem
-                    ├── LibreOffice
-     ResearchMesh ──┼── Playwright
-                    ├── MCP #1
-                    ├── MCP #2
-                    ├── MCP #3
-                    └── ...
+                            ┌── /think
+                            │
+                            ├── PowerShell
+                            ├── Filesystem
+                            ├── LibreOffice
+     ResearchMesh-Windows ──┼── Playwright
+                            ├── MCP #1
+                            ├── MCP #2
+                            ├── MCP #3
+                            └── ...
 
-A terminal chat client for the Anthropic API that hands Claude real tools on your own Linux
+A terminal chat client for the Anthropic API that hands Claude real tools on your own Windows
 machine: a shell, a file editor, a headless browser it can surf with, a persistent Python
 session, desktop control, and document conversion. Ask it something and it can look it up,
 read the pages, run the commands, and hand you back a finished `.docx` — in one conversation.
@@ -37,25 +36,25 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 | Tool | For |
 |---|---|
-| `bash` | Shell commands as your user. Stateless — fresh subprocess each call |
-| `str_replace_based_edit_tool` | View, create, and edit files |
+| `powershell` | PowerShell commands as your user. Stateless — fresh process each call |
+| `str_replace_based_edit_tool` | View, create, and edit files. Preserves each file's existing line endings |
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
-| `computer` | Screenshots plus mouse/keyboard control of your desktop. **Needs an X11 session** ([see below](#full-setup-detail)) |
+| `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#full-setup-detail)) |
 | `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` | Headless [Playwright](https://playwright.dev/) — real DOM surfing: renders JavaScript, follows links, fills forms |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
 | `python` | Persistent IPython kernel — **variables survive between calls** |
-| `interactive_run` | Commands that prompt: passwords, `[y/N]`, ssh host keys, installers, REPLs |
+| `interactive_run` | Commands that prompt: passwords, `[y/N]`, ssh host keys, winget and other installers, REPLs |
 | `config_edit` | Edit YAML/TOML/JSON **without destroying your comments** |
 | `sql_query` | DuckDB straight against CSV/Parquet/JSON — no import step |
-| `trash` | Recoverable deletes instead of `rm` |
+| `trash` | Recoverable deletes to the Recycle Bin. `Remove-Item` bypasses it entirely and has no switch to use it, so this is the only undo you get |
 
 Claude chooses the tools and keeps working until it has an answer.
 
 ## Quick start
 
-You need **Linux**, **Python 3.11+**, and an Anthropic **API key** — this is an API client,
-so a Claude subscription won't work.
+You need **Windows 10 or 11**, **Python 3.11+**, and an Anthropic **API key** — this is an
+API client, so a Claude subscription won't work.
 
 **MCP servers are optional.** The `[mcp]` block in `config.toml` ships with
 `enabled = false` and every server commented out, so a fresh clone runs on the 18
@@ -65,21 +64,34 @@ your own before uncommenting and setting `enabled = true`.
 
 mcp_client.py is just a script to connect to your MCP server and pull a list of tools, be sure you change the IP address in the code.
 
-```bash
-sudo apt install python3 python3-venv python3-dev build-essential \
-                 libreoffice pandoc python3-tk scrot
+```powershell
+winget install Python.Python.3.12
+winget install TheDocumentFoundation.LibreOffice   # document_convert
+winget install JohnMacFarlane.Pandoc              # document_convert, markdown path
 
-python3 -m venv ~/claude-chat-plus-more-tools
-source ~/claude-chat-plus-more-tools/bin/activate
+py -m venv $HOME\researchmesh
+$HOME\researchmesh\Scripts\Activate.ps1
 pip install -r requirements.txt
 
 playwright install chromium           # pip installs the package, not the browser
-sudo playwright install-deps chromium
 
-export ANTHROPIC_API_KEY=sk-ant-...   # add to ~/.bashrc to keep it, and put your N8N API key in .bashrc as well, or you will have to rewrite code to make it elsewhere if not exporting it before runnning main.py
+# Persist the key for future shells, and set it for this one.
+setx ANTHROPIC_API_KEY "sk-ant-..."
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
 
 python main.py
 ```
+
+If PowerShell refuses to run the activation script (`running scripts is disabled on this
+system`), that is the default execution policy, not a broken install:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+Two things about `winget install` that look like failures and are not: **LibreOffice does
+not add itself to PATH** (this client looks in `C:\Program Files\LibreOffice\program` as
+well), and **pandoc's PATH entry does not reach an already-open shell** — restart it.
 
 Then just type. **`/think <message>`** gives Claude longer to reason on hard problems;
 **`/clear`** drops the conversation without restarting the app; **Ctrl-C** exits and
@@ -96,21 +108,21 @@ the kernel, your MCP connections and `/memories`.
 ## Try it
 
 ```
-Run uname -a and tell me what kernel I'm on.
+Run Get-ComputerInfo and tell me what build of Windows I'm on.
 
 What's the latest stable Python release? Cite your source.
 
 Open news.ycombinator.com, list the top links, then open the first one and summarise it.
 
-Load ~/data.csv and show me the five biggest rows by revenue.
+Load C:\Users\me\data.csv and show me the five biggest rows by revenue.
 
 Write a one-page summary of the Raft consensus algorithm as markdown,
-then convert it to a .docx in ~/Documents.
+then convert it to a .docx in my Documents folder.
 
 Give me a Cisco IOS 17.15 config for a 9200 24-port switch: VTP client so my VLAN
 database isn't overwritten, two uplinks active/standby at 1 Gbps, all 24 ports up and
 ready for voice + data VLANs pushed from the VLAN server, uplink trunk on VLAN 100.
-Note what I need to change for my environment, then write it to /tmp/switch.txt.
+Note what I need to change for my environment, then write it to my Desktop.
 
 What is the airspeed velocity of an unladen swallow?
 ```
@@ -166,7 +178,6 @@ those you edit by hand.
 | `CLAUDE_SHOW_USAGE=1` | Print token and prompt-cache counts per request |
 | `CLAUDE_MEMORY_DIR` | Where `memory` stores `/memories` (default `./memories`) |
 | `CLAUDE_DISPLAY_SIZE` | Logical screen size `computer` reports, e.g. `1280x800` |
-| `CLAUDE_COMPUTER_FORCE=1` | Let `computer` try anyway on a Wayland session |
 | `CLAUDE_KERNEL_ENCRYPTION` | `auto` (default) encrypts the `python` kernel's sockets with CurveZMQ and falls back if it can't; `required` fails the tool instead of running unencrypted; `off` skips it |
 
 ## MCP, in both directions
@@ -189,10 +200,10 @@ steps, surf a real DOM, and reach ResearchMesh's own MCP servers.
 
 ### Add it to Claude Code
 
-```bash
-claude mcp add researchmesh --scope user \
-  --env ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-  -- "$HOME/tif-env/bin/python" /path/to/ResearchMesh/mcp_server.py
+```powershell
+claude mcp add researchmesh --scope user `
+  --env ANTHROPIC_API_KEY="$env:ANTHROPIC_API_KEY" `
+  -- "$HOME\researchmesh\Scripts\python.exe" C:\path\to\ResearchMesh-Windows\mcp_server.py
 ```
 
 That's it — no token, no ports, nothing to start. Claude Code launches the server itself when
@@ -217,7 +228,7 @@ stdio (above) is right whenever the client launches its own server — Claude Co
 Desktop, most editors. Use HTTP instead to share one agent between several clients, or for a
 client that only speaks HTTP:
 
-```bash
+```powershell
 python mcp_server.py --transport streamable-http --port 8765
 # point the client at http://127.0.0.1:8765/mcp
 ```
@@ -230,8 +241,8 @@ stream).
 variable and it's required; leave it unset and the endpoint is unauthenticated, which is
 allowed by design and announced at startup:
 
-```bash
-export RESEARCHMESH_MCP_TOKEN=<token>          # see Tokens below
+```powershell
+$env:RESEARCHMESH_MCP_TOKEN = "<token>"        # see Tokens below
 python mcp_server.py --transport streamable-http --host 0.0.0.0
 ```
 
@@ -252,10 +263,10 @@ history. `--token-env VAR` renames the variable.
 token and every task and result cross the network in the clear, which is called out at startup
 on a non-loopback bind:
 
-```bash
-python mcp_server.py --transport streamable-http --host 0.0.0.0 \
-    --ssl-certfile /etc/ssl/certs/worker-fullchain.pem \
-    --ssl-keyfile  /etc/ssl/private/worker.key
+```powershell
+python mcp_server.py --transport streamable-http --host 0.0.0.0 `
+    --ssl-certfile C:\certs\worker-fullchain.pem `
+    --ssl-keyfile  C:\certs\worker.key
 ```
 
 The startup line then says `https://`. Give `--ssl-certfile` the **full chain** — leaf first,
@@ -266,8 +277,8 @@ both paths are checked to exist before the port opens.
 
 Nothing is configured on the client side to match: the URL becomes `https://…` and verification
 goes through the connecting machine's own OS trust store, so a company CA already rolled out to
-that machine is trusted, as is any public certificate. `SSL_CERT_FILE=/path/ca.pem` overrides
-that per process if you'd rather not install a CA system-wide.
+that machine is trusted, as is any public certificate. `$env:SSL_CERT_FILE` overrides that per
+process if you'd rather not import a CA into the machine store.
 
 Both transports are the same server object — no separate build, no high-level-server rewrite. Under HTTP
 the stdout guard is skipped (fd 1 isn't the wire there) so the app's messages become ordinary
@@ -284,12 +295,12 @@ authenticate.
 
 Generate one with the interpreter this project already requires — no `openssl` needed:
 
-```bash
+```powershell
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 256 bits from the OS CSPRNG. There's deliberately no `generate_token.py` here: a file wrapping
-one line of stdlib would be the same mistake as a tool wrapping a command `bash` could already
+one line of stdlib would be the same mistake as a tool wrapping a command PowerShell could already
 run.
 
 The value lives in an environment variable; only its *name* goes in a file. Which file depends
@@ -297,8 +308,8 @@ on how the process starts, and this is the part that catches people:
 
 | How it starts | Where the token has to be |
 |---|---|
-| You, from an interactive shell | `export RESEARCHMESH_MCP_TOKEN=…` in `~/.bashrc` |
-| `systemd` unit | `EnvironmentFile=` — a unit does **not** read `~/.bashrc` |
+| You, from an interactive shell | `setx RESEARCHMESH_MCP_TOKEN …` (persists; new shells only) plus `$env:RESEARCHMESH_MCP_TOKEN = …` for the current one |
+| A Windows service or Scheduled Task | Set it machine-wide or in the service's own environment — neither inherits your interactive shell |
 | Spawned by an MCP client | the `env` block of that server's entry in the client config |
 
 Two things to get right:
@@ -311,12 +322,11 @@ Two things to get right:
   variable would have to mean two different secrets. Rename either end with `--token-env VAR`
   or `token_env = "VAR"`.
 
-**Can you just ask ResearchMesh to set it up?** Mostly. It can generate the token, append the
-export to `~/.bashrc`, write a systemd `EnvironmentFile`, and update a consuming
-`config.toml`. It *cannot* set the variable in your shell — the `bash` tool is a fresh
-subprocess per call, and a child can't alter its parent's environment anyway — so you still
-need a new shell (or `source ~/.bashrc`) and a server restart. Tell it not to write the
-literal token into anything in the repo.
+**Can you just ask ResearchMesh to set it up?** Mostly. It can generate the token, persist it
+with `setx`, and update a consuming `config.toml`. It *cannot* set the variable in the shell
+you are sitting in — the `powershell` tool is a fresh process per call, and a child cannot
+alter its parent's environment anyway — so you still need a new shell and a server restart.
+Tell it not to write the literal token into anything in the repo.
 
 </details>
 
@@ -326,23 +336,24 @@ literal token into anything in the repo.
   your user, with no y/n in between. Built for local development. `trash` exists so deletes
   are at least recoverable.
 - It's your API key: one request can fan out into many tool calls (capped at 30 per turn).
-- `bash` forgets everything between calls — `cd`, exports, activated venvs. Chain with `&&`,
-  or use `python`, which keeps state.
+- `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
+  Chain with `;` in one call, or use `python`, which keeps state.
+- **Compatibility aliases are removed before each command runs.** `ls`, `cat`, `rm`, `cp`, `mv`, `ps`,
+  `kill`, `diff`, `tee`, `pwd`, `curl` and `wget` ship with PowerShell as compatibility
+  aliases; this client deletes them so reaching for one fails outright instead of failing
+  confusingly on a parameter. Write the cmdlet — `Get-ChildItem`, `Get-Content`,
+  `Remove-Item`. DOS names (`dir`, `type`, `copy`, `del`, `cls`) are untouched.
 - Ask for files by absolute path. If Claude offers a download link instead, tell it you need
   the file written to disk.
-- Nothing under `/tmp` can be trashed (tmpfs has no trash), so deletes there would be
-  permanent — the tool says so rather than pretending.
-- **`computer` does not work on Wayland.** It drives the screen through X11/XTEST, which
-  Wayland compositors ignore by design, so clicks and keystrokes never reach native windows
-  and screenshots come back blank. Check with `echo $XDG_SESSION_TYPE`; if it prints
-  `wayland`, the tool refuses up front and tells you why rather than clicking into the void.
-  Fix it with an Xorg session or `xvfb-run -s '-screen 0 1280x800x24' python main.py` —
-  details under [Full setup detail](#full-setup-detail). Every other tool is unaffected.
-  There's a real, narrower exception if the actual application you need to control is itself
-  an XWayland client (common — many Qt/GTK/Java desktop apps still run this way even on a
-  Wayland desktop): Claude can drive *that one window* directly with plain X11-protocol
-  calls, entirely outside the `computer` tool. See [Full setup
-  detail](#full-setup-detail) for the recipe.
+- Network shares and most removable drives have no Recycle Bin, so deletes there would be
+  permanent — `trash` says so rather than pretending.
+- **`computer` cannot touch an elevated window.** Windows blocks input from a normal process
+  into one running as Administrator (UIPI), so if an elevated terminal, a UAC dialog, Task
+  Manager or some installer has focus, clicks and keystrokes are silently discarded and the
+  screenshot afterwards looks like a click that missed. Typing reports it; clicking cannot.
+  If a sequence has no visible effect, suspect this first. Every other tool is unaffected.
+- **`computer` is primary-monitor only** and assumes the client is DPI-aware, which it sets
+  at startup. A second monitor is not captured.
 - If Sonnet gets inconsistent on a complicated multi-tool request, set `model` to an Opus one.
 - Optional packages are imported only when a tool is used, so a missing one breaks just that
   tool and tells you what to install.
@@ -372,10 +383,9 @@ literal token into anything in the repo.
   handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
   (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
 - **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
-  — that would need LibreOffice, a browser, an X11 display and real API credits. If your venv
-  happens to have `pylint`/`black` installed (neither is a project dependency) or the system
-  has `shellcheck`, they're safe to run by hand — expect plenty of output, since nothing is
-  configured for them.
+  — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
+  happens to have `pylint`/`black` installed (neither is a project dependency) they're safe to
+  run by hand — expect plenty of output, since nothing is configured for them.
 - **Two things a linter will fight you on here** — worth knowing before you "fix" them.
   Broad `except Exception`/`except BaseException` is the design, not sloppiness: every local
   tool must catch anything and return an error string rather than crash the chat loop, which
@@ -389,15 +399,15 @@ literal token into anything in the repo.
 <details>
 <summary><b>Full setup detail</b> — OS libraries, document tools, which package backs which tool</summary>
 
-**Playwright.** `pip` installs the Python package but not the browser or its OS libraries:
+**Playwright.** `pip` installs the Python package but not the browser itself:
 
-```bash
+```powershell
 playwright install chromium            # the browser binary
-sudo playwright install-deps chromium  # OS libraries (e.g. libmanette)
 ```
 
 `playwright install` with no browser name fetches all three engines; this app only launches
-Chromium, so the argument is worth keeping.
+Chromium, so the argument is worth keeping. There is no `install-deps` step — that installs
+shared libraries for other operating systems and does not apply here.
 
 **Document conversion.** `soffice` (LibreOffice) handles docx/odt/xlsx/pptx/html/rtf/txt and
 PDF output, each call in a throwaway user profile so two conversions can't collide on the
@@ -406,75 +416,26 @@ import; `md → pdf` goes through odt on the way, since pandoc's own PDF writer 
 LaTeX engine. `libreoffice-writer`/`-calc`/`-impress` alone are enough if you don't want the
 whole suite.
 
-**Computer use needs two apt packages that pip won't install.** `pip install pyautogui`
-succeeds without them, so the failure is misleading — the tool reports pyautogui as missing
-when it is right there:
+**Computer use needs no system packages.** `pyautogui` and `pillow` from
+`requirements.txt` are the whole dependency and screen capture works out of the box.
 
-- **`python3-tk`** — `pyautogui` pulls in `mouseinfo`, which imports `tkinter` at module
-  level. Without it, `import pyautogui` raises and `computer` returns its install hint for a
-  package you already have.
-- **`scrot`** — `pyscreeze` only has a screenshot path if `gnome-screenshot` is present (which
-  lets it use Pillow's `ImageGrab`) or `scrot` is. With neither, capture fails on X11 even
-  though every Python package is installed. Either works; `scrot` is the lighter one.
+Two limits worth knowing before you rely on it:
 
-**Computer use also needs X11.** The `computer` tool synthesises input through X11/XTEST, which
-Wayland compositors deliberately ignore — on a Wayland session clicks and keystrokes never
-reach native windows and screenshots come back blank, so the tool refuses up front and says
-so instead of failing silently. Check with `echo $XDG_SESSION_TYPE`. Options:
+- **Elevated windows are unreachable.** Windows blocks input from a normal-integrity process
+  into a window owned by an elevated one (User Interface Privilege Isolation). If an
+  Administrator terminal, a UAC consent dialog, Task Manager or an installer has focus,
+  clicks and keystrokes are discarded — and the screenshot afterwards looks exactly like a
+  click that missed. `type` detects it (`SendInput` reports how many events landed) and says
+  so; the mouse actions get no such signal from Windows and fail silently. Running the whole
+  client elevated fixes it for elevated targets, at the obvious cost.
+- **Primary monitor only.** Capture is deliberately limited to the primary display: the
+  coordinate maths scales against that screen's size, so grabbing the whole virtual desktop
+  would put every click on the wrong monitor. Proper multi-monitor support needs the virtual
+  desktop's bounds *and* origin, which can be negative.
 
-```bash
-# 1. Log in to an "Xorg"/"X11" session at your display manager, or
-# 2. Run the whole client inside a nested X server:
-sudo apt install xvfb
-xvfb-run -s '-screen 0 1280x800x24' python main.py
-# 3. XWayland-only setup and you want to try regardless:
-export CLAUDE_COMPUTER_FORCE=1
-```
-
-**A real exception: an XWayland-backed target application.** The refusal above is about
-`computer`'s own generic approach — `pyautogui`'s screenshot backend needs a real X11 root
-window to grab and a Wayland compositor doesn't expose one, so a *whole-desktop* capture
-genuinely can't be made to work this way, full stop. But if the specific application you're
-trying to control is itself an XWayland client — true for many desktop GUI toolkits that
-haven't been ported to native Wayland (Qt, GTK, Java/Swing, Unity Editor, JetBrains IDEs, and
-more) — it still has a real, addressable X11 window underneath, and Claude can drive *that one
-window* directly with plain X11-protocol tools via `bash`/`python`, bypassing
-`computer`/`pyautogui` entirely:
-
-```bash
-# 1. Confirm the target really is XWayland-backed (a normal X11 window entry, not absent):
-xwininfo -root -tree | grep -i "<window title>"
-
-# 2. Find its window id and raise it:
-wmctrl -l
-wmctrl -i -a 0x<id>
-
-# 3. Screenshot just that window (a whole-screen grab still won't work):
-import -window 0x<id> /tmp/shot.png     # ImageMagick
-
-# 4. Send it genuine XTEST input -- works even without xdotool installed:
-python3 -c "
-from Xlib import X, XK, display
-from Xlib.ext import xtest
-d = display.Display()
-xtest.fake_input(d, X.KeyPress, d.keysym_to_keycode(XK.XK_Escape))
-d.sync()
-xtest.fake_input(d, X.KeyRelease, d.keysym_to_keycode(XK.XK_Escape))
-d.sync()
-"
-```
-
-`xdotool` is the usual convenience wrapper for step 4, but if it isn't installed (and there's
-no sudo to `apt install` it), `python-xlib` calls the exact same XTEST extension directly —
-`Xlib.ext.xtest.fake_input` — so it's a full substitute, not a downgrade. One real gotcha
-worth knowing up front: a mouse click has to land on an actual interactive control (a real
-button, not empty space or a plain label) before a *subsequent* injected key event reliably
-reaches the target app's own event handlers — clicking blank space to "just establish focus"
-does not reliably work the same way. This does **not** make `computer` itself work on
-Wayland — the refusal above still stands, and a full-desktop screenshot genuinely isn't
-possible this way. It's a separate, manual technique for one already-identified XWayland
-window, useful whenever a task needs to drive or inspect one specific already-running GUI
-application from a Wayland session.
+The client declares per-monitor DPI awareness at startup. Without it Windows reports
+virtualised coordinates on a scaled display while screenshots come back at physical
+resolution, and every click drifts further off toward the bottom-right.
 
 The tool reports a fixed logical screen size (`CLAUDE_DISPLAY_SIZE`, default `1280x800`)
 and downscales every screenshot to exactly that, scaling Claude's coordinates back up to
@@ -491,11 +452,11 @@ Claude, not a place for your project files — and it persists until you delete 
 | Tool | Needs |
 |---|---|
 | `python` | `jupyter_client>=8.9.1`, `ipykernel>=7` — older versions work, but unencrypted (see below) |
-| `interactive_run` | `pexpect` |
+| `interactive_run` | `pywinpty` (ConPTY) |
 | `config_edit` | `ruamel.yaml` (YAML), `tomlkit` (TOML), `jsonpath-ng` (`$…` queries); JSON needs nothing |
 | `sql_query` | `duckdb` |
 | `trash` | `send2trash` |
-| `computer` | `pyautogui`, `pillow` — **plus `python3-tk` and `scrot` from apt, and an X11 display** (see below) |
+| `computer` | `pyautogui`, `pillow` |
 | `memory` | nothing — standard library only |
 
 To drop a tool entirely, remove its module from `MODULES` in `core/local_tools.py`.
@@ -505,52 +466,58 @@ data, the results — travels over ZeroMQ, which by default is plaintext on four
 ports; `ipykernel` says so itself, warning on every start that the link "is susceptible to
 eavesdropping". ResearchMesh has the kernel manager provision a CurveZMQ keypair instead, so
 both ends talk CURVE. That needs `jupyter_client>=8.9.1` and `ipykernel>=7` (and a pyzmq built
-with libsodium, which the wheels are); on anything older it falls back to a Unix socket in the
-Jupyter runtime dir, and then to plaintext TCP, printing which and why each time it drops a
-tier. Set `CLAUDE_KERNEL_ENCRYPTION=required` to make an unencrypted kernel a hard error
+with libsodium, which the wheels are); on anything older it falls back to plaintext TCP,
+printing why. There is no middle tier — ZeroMQ's `ipc://` transport has no Windows
+implementation — so CurveZMQ is the only thing between that link and an open loopback port. Set `CLAUDE_KERNEL_ENCRYPTION=required` to make an unencrypted kernel a hard error
 rather than a fallback — if you see that error, `pip install -U 'jupyter_client>=8.9.1'
 'ipykernel>=7'` is the fix.
 
-**Environment variables** must be exported for the user account you launch as — `main.py`
-calls `os.getenv()` directly. Put them in `~/.bashrc` for interactive shells, or
-`~/.bash_profile` / `~/.profile` for login shells (e.g. SSH). Note `export`, and **no spaces**
-around `=`; `VAR = value` is a bash syntax error. Then open a fresh shell or `source` it, and
-check without revealing anything:
+**Environment variables** must be set for the user account you launch as — `main.py` calls
+`os.getenv()` directly. `setx VAR "value"` writes them to the user environment but only
+affects shells started *afterwards*, so set `$env:VAR = "value"` as well for the shell you are
+in. Then check without revealing anything:
 
-```bash
-echo "key: ${ANTHROPIC_API_KEY:+set}  token: ${N8N_MCP_TOKEN:+set}"   # per your token_env names
+```powershell
+# Prints True/False without echoing the value.
+[bool]$env:ANTHROPIC_API_KEY, [bool]$env:N8N_MCP_TOKEN
 ```
 
-**Built and tested on** Ubuntu 26.04 LTS (kernel 7.0.0), Python 3.14.4, Playwright 1.61.0.
-`pyproject.toml` requires 3.11+ (the floor is `tomllib`, used by `main.py`); 3.14 is just what
-it was run on. The `install-deps` step assumes a Debian/Ubuntu `apt` system.
+**Targets** Windows 10/11 and Python 3.11+ (`pyproject.toml`; the floor is `tomllib`, used by
+`main.py`). CI runs 3.11 and 3.14 on `windows-latest`.
 
 </details>
 
 <details>
 <summary><b>HTTPS and TLS</b> — for an MCP server with a self-signed or private-CA certificate</summary>
 
-A server URL may be `http://` or `https://`. TLS is verified by the `httpx` client inside
-`mcp_client.py`, offline, against a local CA bundle — the CA is not contacted at connect time.
+A server URL may be `http://` or `https://`. TLS is verified by the `httpx2` client inside
+`mcp_client.py`, offline — the CA is not contacted at connect time.
 
-A publicly-signed certificate (Let's Encrypt, DigiCert, …) works with no configuration. A
-self-signed or internal-CA certificate isn't in `certifi`, so point `httpx` at a bundle that
-contains your CA:
+**Verification goes through the Windows certificate store.** `httpx2` builds its default
+context with `truststore.SSLContext`, which defers to the OS rather than to a bundled
+`certifi` list. So a publicly-signed certificate (Let's Encrypt, DigiCert, …) works with no
+configuration, and the fix for an internal CA is the ordinary Windows one — import it once
+and every tool on the machine trusts it:
 
-```bash
-export SSL_CERT_FILE=/path/to/your-ca-chain.pem   # or SSL_CERT_DIR for a hashed dir
+```powershell
+# Machine-wide (needs an elevated shell); use Cert:\CurrentUser\Root for just you.
+Import-Certificate -FilePath C:\certs\your-ca.crt -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+If you would rather scope it to this process only, `SSL_CERT_FILE` still overrides:
+
+```powershell
+$env:SSL_CERT_FILE = "C:\certs\your-ca-chain.pem"   # or SSL_CERT_DIR for a hashed dir
 ```
 
 Two things that catch people out:
 
-- `SSL_CERT_FILE` **replaces** the default trust store rather than adding to it. If the same
-  process also needs public HTTPS hosts, concatenate:
-  `cat "$(python -m certifi)" your-ca.pem > combined-ca.pem`
+- `SSL_CERT_FILE` **replaces** the trust store rather than adding to it, so a process using it
+  loses the Windows store — including every public CA. Importing into `Cert:\LocalMachine\Root`
+  avoids that problem entirely, which is why it is the first suggestion above.
 - Your server (or its reverse proxy) must present its **full chain**. A missing
   intermediate is the most common "the cert is valid but it still won't connect" cause, and
   the fix is on the server — the client only needs the root.
-
-The OS trust store (`/etc/ssl/certs`) does not affect this app.
 
 </details>
 
@@ -573,13 +540,13 @@ core/
   claude.py                      Anthropic SDK wrapper
   local_tools.py                 registry of every locally-executed tool
   tools.py                       MCP <-> Anthropic bridge
-  claude_learned_schemas.py      bash, file editor, web_search, web_fetch
+  claude_learned_schemas.py      file editor, web_search, web_fetch
   memory.py                      /memories store, persists across sessions
-  computer.py                    screenshots + mouse/keyboard (X11 only)
+  computer.py                    screenshots + mouse/keyboard
   browser.py                     Playwright DOM surfing
   documents.py                   LibreOffice / pandoc conversion
   kernel.py                      persistent IPython kernel
-  processes.py                   pexpect — commands that prompt
+  processes.py                   ConPTY — commands that prompt
   config_edit.py                 comment-preserving YAML/TOML/JSON edits
   data.py                        DuckDB queries
   files.py                       recoverable deletes
@@ -598,7 +565,7 @@ core/
   describes the tool set to Claude.
 - **Keep the list lean.** Tool-selection accuracy degrades past roughly 30–50 tools, so prefer
   one tool with a mode parameter over several near-duplicates, and don't wrap a command
-  `bash` could already run.
+  PowerShell could already run.
 
 Check every configured server on its own with `python mcp_client.py` — it connects to each
 in turn, lists its tools, and reports failures without starting the chat.
@@ -612,7 +579,7 @@ This project is **pure Python; Node.js is not a dependency.** For hand-calling t
 MCP endpoint exposes, the [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
 runs on demand with no install step:
 
-```bash
+```powershell
 npx @modelcontextprotocol/inspector@latest
 ```
 

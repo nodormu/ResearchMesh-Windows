@@ -132,15 +132,9 @@ def _start_manager():
     `CLAUDE_KERNEL_ENCRYPTION=required` stops at the first tier and fails the
     tool rather than running in the clear; `off` skips straight to plaintext.
 
-    The POSIX build of this module had an IPC tier in the middle, on the
-    reasoning that a user-only socket file is a smaller target than an open
-    loopback port. It is gone here rather than ported: ZeroMQ's `ipc://`
-    transport is AF_UNIX, which Windows has no equivalent for — pyzmq raises
-    `Operation not supported` on bind, so the tier could only ever have printed
-    a failure and fallen through to the same plaintext TCP below it.
-
-    That makes CurveZMQ load-bearing rather than merely preferred here: on
-    Windows it is the *only* thing standing between the kernel link and four
+    There is no middle tier. ZeroMQ's `ipc://` transport has no Windows
+    implementation — pyzmq raises `Operation not supported` on bind — so
+    CurveZMQ is the only thing standing between the kernel link and four
     plaintext loopback ports carrying every line of code and every result.
     Worth setting CLAUDE_KERNEL_ENCRYPTION=required if that matters to you.
     """

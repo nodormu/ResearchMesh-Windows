@@ -58,11 +58,9 @@ def _expand(value):
     the "could not reach/launch" message instead of silently collapsing to a
     path with an empty segment in the middle.
 
-    On Windows `expandvars` accepts `%VAR%` as well as `$VAR`/`${VAR}`, so
-    config.toml may use either spelling. Note the variable *names* differ from
-    POSIX even though the syntax carries over: it is `$USERNAME`, not `$USER`,
-    and `$USERPROFILE`, not `$HOME`. Those two are the likely reason a path
-    copied from the upstream Linux config comes through unexpanded.
+    `expandvars` accepts `%VAR%` here as well as `$VAR`/`${VAR}`, so
+    config.toml may use either spelling — `%USERPROFILE%` and `%USERNAME%`
+    being the two that come up most.
     """
     if isinstance(value, str):
         return os.path.expanduser(os.path.expandvars(value))

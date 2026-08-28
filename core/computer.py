@@ -30,17 +30,16 @@ physical pixels, which is the only state in which this module's arithmetic is
 correct.
 
 **Elevation (UIPI).** Windows does have one case where synthesised input goes
-nowhere, and it is the closer analogue of the POSIX build's Wayland problem
-than the DPI note above: User Interface Privilege Isolation stops a process at
+nowhere, and it matters more than the DPI note above: User Interface Privilege Isolation stops a process at
 medium integrity from sending input to a window owned by a higher-integrity
 one. If anything running as Administrator has focus — an elevated terminal,
 UAC's own consent dialog, some installers, Task Manager — clicks and keystrokes
 from here are discarded, and the screenshot afterwards looks exactly like a
 click that did nothing.
 
-It is not guarded up front the way Wayland was, because unlike Wayland it is a
-property of whichever window happens to have focus at that instant rather than
-of the session, so a refusal at tool-entry would be wrong most of the time.
+It is not refused at tool-entry, because it is a property of whichever window
+happens to have focus at that instant rather than of the machine, so a refusal
+up front would be wrong most of the time.
 Instead `_type` checks how many events `SendInput` actually delivered and says
 so, which is the only point where Windows reports the failure at all. The mouse
 actions have no equivalent signal — `SendInput` for a click succeeds whether or
@@ -97,7 +96,8 @@ BETA_FLAG = "computer-use-2025-11-24"
 # Let the UI repaint before we capture the result of an action.
 _SETTLE = 0.4
 
-# Claude uses xdotool-style key names; pyautogui has its own spelling.
+# Claude names keys the way the tool schema does; pyautogui has its own
+# spelling for several of them.
 _KEY_ALIASES = {
     "return": "enter",
     "kp_enter": "enter",
@@ -192,7 +192,7 @@ def _run(tool_input: dict) -> str | dict:
 
     try:
         import pyautogui
-    except Exception as e:  # ImportError, or X11 lookup failure at import
+    except Exception as e:  # ImportError, or a failure inside pyautogui's own import
         return (
             f"Error: the computer tool needs pyautogui ({e}). "
             "Install it with: pip install pyautogui pillow"
@@ -316,7 +316,7 @@ class _MOUSEINPUT(ctypes.Structure):
     #
     # c_int32 rather than c_long for the Win32 LONG fields. Both are 4 bytes on
     # Windows so this changes nothing there, but c_long follows the host's C
-    # `long` and is 8 bytes on 64-bit Linux — which made these structures
+    # `long` and is 8 bytes where that is 64-bit — which made these structures
     # compute a 48-byte INPUT when checked from the machine this port was
     # written on, and left no way to tell a real layout error from an artefact
     # of the checking host. Fixed-width types make the arithmetic the same
@@ -416,8 +416,8 @@ def _type(text: str) -> str:
     # integrity cannot inject input into a window owned by an elevated one, and
     # SendInput reports that by silently delivering fewer events rather than
     # failing loudly. Say so instead of claiming success — this is the one
-    # Windows equivalent of the POSIX build's "clicking into the void", and it
-    # applies to every action here, not just typing.
+    # one way input can be discarded with no error, and it applies to every
+    # action here, not just typing.
     return (
         f"Error: typed only {sent} of {len(events)} key events. The usual cause "
         "is a focused window running as Administrator: Windows blocks input "
@@ -505,9 +505,7 @@ def _grab(pyautogui):
     virtual-desktop bounds *and* its origin, which can be negative when a
     monitor sits left of the primary — a real feature, not a flag flip.
 
-    The POSIX build had a third tier shelling out to ImageMagick's `import`,
-    which is X11-only and has no Windows counterpart; two backends is the
-    whole ladder here.
+    Two backends is the whole ladder.
     """
     errors = []
     try:

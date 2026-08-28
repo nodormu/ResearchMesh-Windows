@@ -9,21 +9,12 @@ from core.output import IMAGE_MEDIA_TYPES, clip, image_result
 #   text_editor             -> client-executed (we run it below)
 #   web_search + web_fetch  -> server-executed by Anthropic (no executor here)
 #
-# `bash` (bash_20250124) used to live here and is deliberately gone. It is a
-# learned schema, which normally makes it free to keep — but "learned" is the
-# problem rather than the argument for it: Claude is trained to emit POSIX
-# shell for that tool name, and there is no honest way to keep the name while
-# running a different shell underneath. Pointing it at PowerShell would just
-# mean `ls | grep foo` arriving at an interpreter that has neither.
-#
-# The alternative was to keep real bash by requiring Git for Windows and
-# invoking its bash.exe. That was rejected because its MinGW filesystem view
-# (`/c/Users/...`) disagrees with the native paths (`C:\Users\...`) that every
-# other tool here returns and accepts, so the two halves of the toolset would
-# hand each other paths the other could not use.
-#
-# core/powershell.py is the replacement, and is a custom schema for that
-# reason: Claude learns it from its description and emits the right dialect.
+# The shell tool is core/powershell.py, not a learned schema here. A learned
+# schema is normally free to keep, but that is exactly what ruled this one out:
+# Anthropic's `bash_20250124` trains the model to emit shell for that tool name,
+# and no interpreter behind it can change what the name asks for. A custom
+# schema is what lets the description say "write PowerShell cmdlets" and be
+# believed.
 
 TEXT_EDITOR_TOOL = {
     "type": "text_editor_20250728",

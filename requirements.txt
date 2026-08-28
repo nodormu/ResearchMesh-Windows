@@ -30,21 +30,18 @@ playwright>=1.40.0       # headless browser tool (core/browser.py)
 # uses), so it is what buys CurveZMQ-encrypted sockets instead of plaintext on
 # four loopback ports. Below it the tool still runs, but in the clear.
 #
-# Treat it as closer to a hard floor on Windows than it was on POSIX. The POSIX
-# build had a middle tier — an AF_UNIX socket in the Jupyter runtime dir — that
-# was unencrypted but at least not a listening port. ZeroMQ's ipc:// transport
-# does not exist on Windows, so that tier is gone (see core/kernel.py) and
-# CurveZMQ is the only thing between the kernel link and plaintext TCP.
+# Treat it as close to a hard floor. ZeroMQ's ipc:// transport has no Windows
+# implementation, so there is no unencrypted-but-not-a-listening-port middle
+# ground (see core/kernel.py): CurveZMQ is the only thing between the kernel
+# link and plaintext TCP.
 jupyter_client>=8.9.1    # `python` — stateful IPython kernel (core/kernel.py)
 # 7.x for the kernel half of that: the curve keys in the connection file, and the
 # kernelspec metadata declaring support that jupyter_client checks before it
 # provisions them.
 ipykernel>=7.0           # the kernel that jupyter_client launches
 pywinpty>=2.0            # `interactive_run` — commands that prompt (core/processes.py).
-                         # Replaces pexpect, which is POSIX-only: it imports `pty`
-                         # and `termios` at module level and cannot run on Windows
-                         # at all. This wraps ConPTY, the real Windows pseudo-
-                         # console, and ships as a prebuilt wheel (no compiler).
+                         # Wraps ConPTY, the Windows pseudo-console, and ships
+                         # as a prebuilt wheel (no compiler needed).
 ruamel.yaml>=0.18        # `config_edit` — YAML round-trip, comments preserved
 tomlkit>=0.12            # `config_edit` — TOML round-trip, comments preserved
 jsonpath-ng>=1.6         # `config_edit` — optional, only for '$.…' JSONPath queries
@@ -66,7 +63,5 @@ pillow>=10.0             # `computer` — screenshot encode/resize; also pyautog
 # does extend PATH, but an already-running shell keeps the old copy — restart
 # this client after installing it.
 #
-# `computer` needs no system packages here. The POSIX build required python3-tk
-# and scrot (tkinter and a screenshot backend) plus an X11 display, with a
-# Wayland refusal on top; on Windows, pyautogui and pillow above are the whole
-# dependency and screen capture works out of the box.
+# `computer` needs no system packages: pyautogui and pillow above are the whole
+# dependency, and screen capture works out of the box.
