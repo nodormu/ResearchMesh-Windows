@@ -27,14 +27,23 @@ playwright>=1.40.0       # headless browser tool (core/browser.py)
 # 8.9.1 is a soft floor, not a hard one: it is where KernelManager grew
 # `transport_encryption` (8.9.0 shipped it but broke restart, which core/kernel.py
 # uses), so it is what buys CurveZMQ-encrypted sockets instead of plaintext on
-# four loopback ports. Below it the tool still runs — _start_manager() falls back
-# to IPC — but the traffic is unencrypted.
+# four loopback ports. Below it the tool still runs, but in the clear.
+#
+# Treat it as closer to a hard floor on Windows than it was on POSIX. The POSIX
+# build had a middle tier — an AF_UNIX socket in the Jupyter runtime dir — that
+# was unencrypted but at least not a listening port. ZeroMQ's ipc:// transport
+# does not exist on Windows, so that tier is gone (see core/kernel.py) and
+# CurveZMQ is the only thing between the kernel link and plaintext TCP.
 jupyter_client>=8.9.1    # `python` — stateful IPython kernel (core/kernel.py)
 # 7.x for the kernel half of that: the curve keys in the connection file, and the
 # kernelspec metadata declaring support that jupyter_client checks before it
 # provisions them.
 ipykernel>=7.0           # the kernel that jupyter_client launches
-pexpect>=4.9             # `interactive_run` — commands that prompt (core/processes.py)
+pywinpty>=2.0            # `interactive_run` — commands that prompt (core/processes.py).
+                         # Replaces pexpect, which is POSIX-only: it imports `pty`
+                         # and `termios` at module level and cannot run on Windows
+                         # at all. This wraps ConPTY, the real Windows pseudo-
+                         # console, and ships as a prebuilt wheel (no compiler).
 ruamel.yaml>=0.18        # `config_edit` — YAML round-trip, comments preserved
 tomlkit>=0.12            # `config_edit` — TOML round-trip, comments preserved
 jsonpath-ng>=1.6         # `config_edit` — optional, only for '$.…' JSONPath queries
@@ -47,16 +56,16 @@ pillow>=10.0             # `computer` — screenshot encode/resize; also pyautog
 
 # --- system binaries, not pip ------------------------------------------------
 # `document_convert` shells out to these:
-#   sudo apt install libreoffice   # soffice: docx/odt/xlsx/pptx <-> pdf conversion
-#   sudo apt install pandoc        # markdown -> docx/odt/pdf authoring path
+#   winget install TheDocumentFoundation.LibreOffice  # docx/odt/xlsx/pptx <-> pdf
+#   winget install JohnMacFarlane.Pandoc              # markdown -> docx/odt/pdf
 #
-# `computer` needs two apt packages that `pip install pyautogui` does not bring.
-# Both fail confusingly: without them the tool reports pyautogui as missing, or
-# capture fails, even though every package above is installed.
-#   sudo apt install python3-tk    # mouseinfo imports tkinter at module level
-#   sudo apt install scrot         # pyscreeze's only screenshot path on X11
+# LibreOffice does not add itself to PATH, so core/documents.py also looks in
+# C:\Program Files\LibreOffice\program. It invokes soffice.com, not soffice.exe:
+# the .exe detaches and returns 0 before converting anything. Pandoc's installer
+# does extend PATH, but an already-running shell keeps the old copy — restart
+# this client after installing it.
 #
-# It also needs an X11 display. Wayland sessions ignore the XTEST input it
-# synthesises, so it refuses to run on one (see core/computer.py). For a
-# headless or Wayland machine:
-#   sudo apt install xvfb          # xvfb-run -s '-screen 0 1280x800x24' python main.py
+# `computer` needs no system packages here. The POSIX build required python3-tk
+# and scrot (tkinter and a screenshot backend) plus an X11 display, with a
+# Wayland refusal on top; on Windows, pyautogui and pillow above are the whole
+# dependency and screen capture works out of the box.

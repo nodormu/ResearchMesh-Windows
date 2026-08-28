@@ -26,12 +26,20 @@ import asyncio
 import base64
 import os
 import shutil
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from core.output import IMAGE_MEDIA_TYPES, clip, image_result
 
 MEMORY_TOOL = {"type": "memory_20250818", "name": "memory"}
 TOOLS = [MEMORY_TOOL]
+
+# Reserved by the Win32 device namespace at every directory level, with or
+# without an extension. See _resolve for why these are rejected outright.
+_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 _URI_ROOT = "/memories"
 # The tool's own description promises Claude that text views truncate at 16000
@@ -54,7 +62,26 @@ def _resolve(uri: str) -> Path:
     Canonicalise first, then test containment: `Path.resolve()` collapses `..`
     and follows symlinks, so both traversal attempts and a symlink planted
     inside the tree fail the `is_relative_to` check rather than slipping past a
-    substring test.
+    substring test. That much is platform-independent, and the Windows-specific
+    escapes it also catches are worth naming, since they look alarming and are
+    in fact already handled: a drive-relative `D:foo` re-anchors the join onto
+    another drive, and a backslash traversal is a real separator here rather
+    than a filename — both resolve to somewhere outside `root` and are then
+    rejected by the same check. Containment fails closed on this platform.
+
+    Two Windows quirks do get past containment, because they land *inside* the
+    tree and are still wrong:
+
+      * **Reserved device names.** `CON`, `NUL`, `PRN`, `AUX`, `COM1`-`COM9`
+        and `LPT1`-`LPT9` are devices at every level of every directory, with
+        or without an extension. `memories/NUL` is not a file: writing to it
+        silently discards the content and reading it back returns nothing, so
+        `create` would report success and the memory would evaporate.
+      * **Alternate data streams.** A colon in a leaf name (`notes.md:hidden`)
+        writes an NTFS stream hanging off the file rather than the file, which
+        `view` and the directory listing then cannot see.
+
+    Both are rejected here rather than left to produce a silent wrong answer.
     """
     if not isinstance(uri, str) or not uri.strip():
         raise ValueError("Error: a path is required")
@@ -66,8 +93,29 @@ def _resolve(uri: str) -> Path:
 
     root = _root()
     relative = uri[len(_URI_ROOT):].lstrip("/")
+
+    for part in PureWindowsPath(relative).parts:
+        stem = part.split(".", 1)[0].rstrip(" .").upper()
+        if stem in _RESERVED_NAMES:
+            raise ValueError(
+                f"Error: {part!r} is a reserved Windows device name and cannot "
+                f"be used as a file or folder name. Got: {uri}"
+            )
+        if ":" in part:
+            raise ValueError(
+                f"Error: {part!r} contains a colon, which on Windows names an "
+                f"alternate data stream rather than a file. Got: {uri}"
+            )
+
     target = (root / relative).resolve() if relative else root
-    if target != root and not target.is_relative_to(root):
+    # normcase before comparing: NTFS is case-insensitive, and `is_relative_to`
+    # compares path parts exactly. Without this, a legitimate `/memories/Notes`
+    # against a root canonicalised as `...\memories` could be rejected purely
+    # over letter case. It cannot admit anything new — a path that is outside
+    # the root is outside it in any casing.
+    if target != root and not PureWindowsPath(
+        os.path.normcase(target)
+    ).is_relative_to(os.path.normcase(root)):
         raise ValueError(f"Error: path escapes {_URI_ROOT}: {uri}")
     return target
 

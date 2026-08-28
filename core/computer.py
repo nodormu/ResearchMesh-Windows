@@ -18,18 +18,28 @@ screen space. Declared size and sent image can therefore never drift apart.
 `client.beta.messages.create` — see BETAS there. Declaring this tool without
 that header is a 400 on every request, not just computer-use ones.
 
-**Wayland.** Input synthesis and screen capture here go through X11/XTEST. On a
-Wayland session that reaches XWayland clients at best and native Wayland windows
-not at all, so rather than silently clicking into the void the tool refuses and
-says why. Override with CLAUDE_COMPUTER_FORCE=1 (useful under XWayland-only
-setups); the real fix is an Xorg session or a nested X server such as Xvfb.
+**DPI scaling.** Windows' own version of the coordinate problem above, and the
+reason `_set_dpi_aware()` runs before pyautogui is ever asked anything. A
+process that has not declared DPI awareness is lied to by the OS: on a display
+at 150% scaling, `pyautogui.size()` reports the *virtualised* 1280x800 while
+`ImageGrab` captures the real 1920x1200 framebuffer, and `SetCursorPos` is
+silently rescaled underneath. `_to_native()` divides by one and multiplies by
+the other, so every click lands progressively further off toward the
+bottom-right. Declaring per-monitor awareness makes both APIs report true
+physical pixels, which is the only state in which this module's arithmetic is
+correct.
+
+This replaces the POSIX build's Wayland guard, which refused up front because
+XTEST is ignored by Wayland compositors. Windows has no equivalent refusal
+case: there is one input API, it always works, and a session that can run this
+process at all can synthesise input into it.
 """
 
 import asyncio
 import base64
+import ctypes
 import io
 import os
-import subprocess
 import time
 
 from core.output import image_result
@@ -107,35 +117,59 @@ async def execute(name: str, tool_input: dict) -> str | dict:
     return await asyncio.to_thread(_run, tool_input)
 
 
-def _guard() -> str | None:
-    """Refuse up front on a session where input synthesis silently no-ops."""
-    if os.getenv("CLAUDE_COMPUTER_FORCE") == "1":
-        return None
-    if os.getenv("XDG_SESSION_TYPE", "").lower() == "wayland" or os.getenv(
-        "WAYLAND_DISPLAY"
-    ):
-        return (
-            "Error: this is a Wayland session. The computer tool drives the "
-            "screen through X11/XTEST, which Wayland compositors ignore for "
-            "security — clicks and keystrokes would not reach native Wayland "
-            "windows, and screenshots would come back blank or partial. Log in "
-            "to an Xorg session, or run this client under a nested X server "
-            "(e.g. `xvfb-run -s '-screen 0 1280x800x24' python main.py`). To "
-            "attempt it anyway on an XWayland-only setup, set "
-            "CLAUDE_COMPUTER_FORCE=1."
-        )
-    if not os.getenv("DISPLAY"):
-        return (
-            "Error: no DISPLAY is set, so there is no screen to control. Start "
-            "an X server or run under xvfb-run."
-        )
-    return None
+_dpi_done = False
+
+
+def _set_dpi_aware() -> None:
+    """Tell Windows to report real pixels, once per process.
+
+    Without this the OS virtualises coordinates for a scaled display and the
+    module's declared-size arithmetic silently drifts — see the module
+    docstring. Per-monitor-v2 is the mode that stays correct when the pointer
+    crosses between monitors at different scale factors; the two older APIs
+    are tried in turn for Windows releases that predate it.
+
+    Failure here is not fatal: it means the process was already marked aware
+    (the usual reason — the call raises OSError when awareness is already set,
+    which is the outcome we wanted anyway) or the box is old enough to lack
+    all three entry points, in which case the tool still works and is merely
+    inaccurate on a scaled display. Reported rather than swallowed so that
+    inaccuracy is traceable.
+    """
+    global _dpi_done
+    if _dpi_done:
+        return
+    _dpi_done = True
+
+    def per_monitor_v2():
+        # -4 = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (Windows 10 1703+)
+        if not ctypes.windll.user32.SetProcessDpiAwarenessContext(-4):
+            raise OSError("SetProcessDpiAwarenessContext returned false")
+
+    def per_monitor():
+        # 2 = PROCESS_PER_MONITOR_DPI_AWARE (Windows 8.1+)
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+
+    def system_wide():
+        ctypes.windll.user32.SetProcessDPIAware()  # Vista+
+
+    reasons = []
+    for attempt in (per_monitor_v2, per_monitor, system_wide):
+        try:
+            attempt()
+            return
+        except Exception as e:
+            reasons.append(f"{attempt.__name__}: {e}")
+    # Only worth saying once every tier has failed: any single failure is
+    # normal (the newer entry points simply do not exist on older Windows,
+    # and all three raise if awareness was already set by a manifest or by an
+    # earlier call, which is the outcome we wanted anyway).
+    print(f"[computer] could not set DPI awareness ({'; '.join(reasons)}); "
+          "coordinates may be inaccurate on a scaled display")
 
 
 def _run(tool_input: dict) -> str | dict:
-    blocked = _guard()
-    if blocked:
-        return blocked
+    _set_dpi_aware()
 
     action = tool_input.get("action")
     if not action:
@@ -299,30 +333,38 @@ def _to_native(pyautogui, coordinate) -> tuple[int, int]:
 
 
 def _grab(pyautogui):
-    """Native-resolution PIL screenshot, trying each backend in turn."""
+    """Native-resolution PIL screenshot, trying each backend in turn.
+
+    Both backends are Pillow underneath on Windows, but they are not the same
+    call: pyautogui's `screenshot()` goes through pyscreeze, and the direct
+    `ImageGrab.grab()` below skips it — worth having as the first tier, since
+    pyscreeze is the layer that historically breaks.
+
+    **Primary monitor only, deliberately.** Pillow offers `all_screens=True`
+    to capture the whole virtual desktop, and it is the wrong choice here: it
+    would silently break the coordinate contract this module exists to keep.
+    `_to_native()` scales Claude's coordinates using `pyautogui.size()`, which
+    reports the *primary* display, so against a two-monitor capture every
+    click would be divided by the wrong width and land on the wrong screen.
+    Supporting multiple monitors properly means teaching `_to_native` the
+    virtual-desktop bounds *and* its origin, which can be negative when a
+    monitor sits left of the primary — a real feature, not a flag flip.
+
+    The POSIX build had a third tier shelling out to ImageMagick's `import`,
+    which is X11-only and has no Windows counterpart; two backends is the
+    whole ladder here.
+    """
     errors = []
+    try:
+        from PIL import ImageGrab
+
+        return ImageGrab.grab()
+    except Exception as e:
+        errors.append(f"PIL.ImageGrab: {e}")
     try:
         return pyautogui.screenshot()
     except Exception as e:
         errors.append(f"pyautogui: {e}")
-    try:
-        from PIL import ImageGrab
-
-        return ImageGrab.grab(xdisplay="")
-    except Exception as e:
-        errors.append(f"PIL.ImageGrab: {e}")
-    try:
-        from PIL import Image
-
-        raw = subprocess.run(
-            ["import", "-window", "root", "png:-"],
-            capture_output=True,
-            timeout=20,
-            check=True,
-        ).stdout
-        return Image.open(io.BytesIO(raw))
-    except Exception as e:
-        errors.append(f"ImageMagick import: {e}")
     raise RuntimeError("; ".join(errors))
 
 

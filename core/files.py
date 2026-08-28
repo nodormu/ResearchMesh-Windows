@@ -1,9 +1,14 @@
 """Recoverable deletes — send2trash.
 
 There is no approval gate in this client: whatever the model decides to run,
-runs. `rm` through the bash tool is therefore one bad path expansion away from
-being unrecoverable, while the XDG trash is a cheap undo. This tool exists so
-the model has a delete that is not final.
+runs. `Remove-Item` through the powershell tool is therefore one bad wildcard
+away from being unrecoverable, while the Recycle Bin is a cheap undo. This tool
+exists so the model has a delete that is not final.
+
+Worth knowing on Windows: `Remove-Item` does *not* use the Recycle Bin, even
+interactively — PowerShell has no switch for it, so the shell's own delete is
+always permanent. That makes this tool the only recoverable delete here rather
+than merely the more convenient one.
 
 Requires:  pip install send2trash
 """
@@ -16,10 +21,11 @@ TOOLS = [
     {
         "name": "trash",
         "description": (
-            "Delete files or directories to the desktop trash, where they can be "
-            "restored. Use this instead of 'rm' in the bash tool for ANY deletion "
-            "the user did not explicitly ask to be permanent — it is the only "
-            "recoverable delete available here."
+            "Delete files or directories to the Windows Recycle Bin, where they "
+            "can be restored. Use this instead of 'Remove-Item' in the powershell "
+            "tool for ANY deletion the user did not explicitly ask to be "
+            "permanent — Remove-Item bypasses the Recycle Bin entirely, so this "
+            "is the only recoverable delete available here."
         ),
         "input_schema": {
             "type": "object",
@@ -27,7 +33,9 @@ TOOLS = [
                 "paths": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Files or directories to move to the trash.",
+                    "description": (
+                        "Files or directories to move to the Recycle Bin."
+                    ),
                 }
             },
             "required": ["paths"],
@@ -78,16 +86,22 @@ def _run(tool_input: dict) -> str:
             send2trash(str(path))
             results.append({"path": str(path), "trashed": True})
         except TrashPermissionError:
-            # GIO refuses to trash from tmpfs and other "system internal"
-            # mounts, and raises this with an empty message — say why instead.
+            # On Windows this is the Recycle Bin declining the volume rather
+            # than a permissions problem: network shares (UNC paths and mapped
+            # drives) have no Recycle Bin at all, most removable media skip it,
+            # and it can be turned off per-volume in its own properties. The
+            # exception carries an empty message in each case, so say what it
+            # actually means.
             results.append(
                 {
                     "path": str(path),
                     "trashed": False,
                     "error": (
-                        "no trash is available for this location (tmpfs mounts "
-                        "such as /tmp cannot be trashed to). Deleting it would "
-                        "have to be permanent — ask the user first."
+                        "this volume has no Recycle Bin, so the file cannot be "
+                        "recovered after deletion. Network shares and most "
+                        "removable drives never have one, and it can also be "
+                        "disabled per-volume. Deleting it would have to be "
+                        "permanent — ask the user first."
                     ),
                 }
             )

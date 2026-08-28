@@ -1,8 +1,8 @@
 """Stateful Python — a real IPython kernel driven over jupyter_client.
 
-This is the one thing the bash tool structurally cannot do: state survives
-between calls. Load a dataframe in one call, query it in the next. It also
-absorbs a whole shelf of would-be tools as plain imports (pandas, sympy,
+This is the one thing the powershell tool structurally cannot do: state
+survives between calls. Load a dataframe in one call, query it in the next. It
+also absorbs a whole shelf of would-be tools as plain imports (pandas, sympy,
 matplotlib, duckdb, Pillow, pypdf) instead of spending a tool slot on each.
 
 The kernel is launched lazily on first use and reused for the rest of the
@@ -19,21 +19,17 @@ import asyncio
 import json
 import os
 import queue
-import re
 import time
 
-from core.output import clip
-
-# IPython colours its tracebacks; the escape codes are pure context bloat here.
-_ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+from core.output import clip, strip_ansi
 
 TOOLS = [
     {
         "name": "python",
         "description": (
             "Run Python in a persistent IPython kernel. Variables, imports, and "
-            "open files PERSIST between calls, unlike the bash tool which starts "
-            "a fresh subprocess every time — so load data once and query it over "
+            "open files PERSIST between calls, unlike the powershell tool which "
+            "starts a fresh process every time — so load data once and query it over "
             "several calls. Use this for computation, data wrangling, and plotting "
             "(save figures to disk and report the path; images are not returned "
             "inline). Returns JSON: output, error traceback if it raised, and the "
@@ -129,45 +125,24 @@ def _start_encrypted():
     return None
 
 
-def _start_ipc():
-    """An unencrypted kernel over IPC, or None. The second-best fallback.
-
-    Not encryption — but a user-only socket file in the Jupyter runtime dir is
-    a smaller target than an open loopback port, and jupyter_client provisions
-    Curve for `transport="tcp"` only, so this cannot be combined with the above.
-
-    `ip` is set explicitly because jupyter_client's default for ipc is the
-    *relative* prefix "kernel-ipc": socket files would land in the process's
-    cwd (the repo root), be left behind if we are killed rather than shut down,
-    and be reused by name — so two ResearchMesh instances would collide.
-    """
-    from jupyter_client import KernelManager
-    from jupyter_core.paths import jupyter_runtime_dir
-
-    manager = None
-    try:
-        runtime_dir = jupyter_runtime_dir()
-        os.makedirs(runtime_dir, exist_ok=True)
-        prefix = os.path.join(runtime_dir, f"researchmesh-{os.getpid()}-ipc")
-        # An AF_UNIX path is capped near 108 bytes and "-<port>" is appended.
-        if len(prefix) > 100:
-            raise OSError(f"socket path prefix too long: {prefix}")
-        manager = KernelManager(transport="ipc", ip=prefix)
-        manager.start_kernel()
-        return manager
-    except Exception as e:
-        print(f"[kernel] IPC transport unavailable: {e}")
-        if manager is not None:
-            _quietly(manager.shutdown_kernel, now=True)
-    return None
-
-
 def _start_manager():
     """Start the kernel on the most protected transport this box supports.
 
-    Encrypted TCP → IPC → plaintext TCP, each tier printing why it fell through.
+    Encrypted TCP → plaintext TCP, the first tier printing why it fell through.
     `CLAUDE_KERNEL_ENCRYPTION=required` stops at the first tier and fails the
-    tool rather than running in the clear; `off` skips straight to IPC.
+    tool rather than running in the clear; `off` skips straight to plaintext.
+
+    The POSIX build of this module had an IPC tier in the middle, on the
+    reasoning that a user-only socket file is a smaller target than an open
+    loopback port. It is gone here rather than ported: ZeroMQ's `ipc://`
+    transport is AF_UNIX, which Windows has no equivalent for — pyzmq raises
+    `Operation not supported` on bind, so the tier could only ever have printed
+    a failure and fallen through to the same plaintext TCP below it.
+
+    That makes CurveZMQ load-bearing rather than merely preferred here: on
+    Windows it is the *only* thing standing between the kernel link and four
+    plaintext loopback ports carrying every line of code and every result.
+    Worth setting CLAUDE_KERNEL_ENCRYPTION=required if that matters to you.
     """
     from jupyter_client import KernelManager
 
@@ -182,10 +157,6 @@ def _start_manager():
                 "`pip install -U 'jupyter_client>=8.9.1' 'ipykernel>=7'`, or unset it to "
                 "fall back to an unencrypted local kernel"
             )
-
-    manager = _start_ipc()
-    if manager is not None:
-        return manager
 
     manager = KernelManager()
     manager.start_kernel()
@@ -310,7 +281,7 @@ def _run(tool_input: dict) -> str:
             if any(k.startswith("image/") for k in data):
                 images += 1
         elif msg_type == "error":
-            traceback_text = _ANSI.sub("", "\n".join(content.get("traceback", [])))
+            traceback_text = strip_ansi("\n".join(content.get("traceback", [])))
         elif msg_type == "status" and content.get("execution_state") == "idle":
             break
 
@@ -346,7 +317,6 @@ def _shutdown_sync():
     if _client is not None:
         _quietly(_client.stop_channels)
     if _manager is not None:
-        # Also unlinks the IPC socket files, when that is the transport in use.
         _quietly(_manager.shutdown_kernel, now=True)
     _manager = _client = None
 

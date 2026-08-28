@@ -21,18 +21,20 @@ from core import (
     files,
     kernel,
     memory,
+    powershell,
     processes,
 )
 from core import claude_learned_schemas as learned
 
 MODULES = [
-    learned,     # bash, text editor, web_search, web_fetch
+    learned,     # text editor, web_search, web_fetch
+    powershell,  # the shell, replacing this project's former bash tool
     memory,      # cross-session memory (learned schema)
     computer,    # screen/mouse/keyboard control (learned schema, beta-gated)
     browser,     # Playwright DOM surfing
     documents,   # LibreOffice / pandoc conversion
     kernel,      # stateful IPython
-    processes,   # pexpect interactive commands
+    processes,   # ConPTY interactive commands
     config_edit,  # comment-preserving YAML/TOML/JSON edits
     data,        # DuckDB
     files,       # trash

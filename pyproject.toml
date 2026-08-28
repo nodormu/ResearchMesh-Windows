@@ -15,7 +15,7 @@ dependencies = [
     # Local tool backings — imported lazily by the tool that needs them.
     "jupyter_client>=8.9.1",   # CurveZMQ transport encryption — see requirements.txt
     "ipykernel>=7.0",
-    "pexpect>=4.9",
+    "pywinpty>=2.0",           # ConPTY; replaces the POSIX-only pexpect
     "ruamel.yaml>=0.18",
     "tomlkit>=0.12",
     "jsonpath-ng>=1.6",
@@ -71,9 +71,18 @@ ignore = [
 # is the right direction of travel for new code.
 [tool.mypy]
 # The optional tool backings (duckdb, playwright, pyautogui, jupyter_client,
-# pexpect, ruamel, tomlkit, jsonpath_ng, send2trash) are imported lazily inside
+# pywinpty, ruamel, tomlkit, jsonpath_ng, send2trash) are imported lazily inside
 # the tool that needs them, so they are legitimately absent from a bare
 # environment — CI installs only the five module-level dependencies. Without
 # this, every one of those imports is an error about a package that is *meant*
 # to be missing. Genuinely wrong imports of installed packages still fail.
 ignore_missing_imports = true
+
+# This is a Windows-only client, so type-check it as Windows regardless of the
+# machine running mypy. Without this, checking from Linux reports `ctypes` has
+# no attribute `windll` (core/computer.py's DPI-awareness calls) — a false
+# positive from the checking host, not a defect in the code. It cuts the other
+# way too, and that is the real value: with it set, code that is wrong *on
+# Windows* is reported even when it happens to type-check on the developer's
+# Linux box, so the gate matches the only platform that ships.
+platform = "win32"

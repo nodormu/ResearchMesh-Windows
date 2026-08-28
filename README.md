@@ -3,12 +3,13 @@
 > *Unofficial, community-built client — not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic.*
 
 > [!WARNING]
-> **Port in progress — this fork does not run on Windows yet.** It is a fork of
-> [ResearchMesh](https://github.com/nodormu/ResearchMesh) taken at commit `9e6959b`, and
-> everything below still describes the Linux original: the setup steps are `apt`, the
-> `computer` tool requires X11, `interactive_run` uses POSIX-only `pexpect`, and the
-> `python` kernel's IPC fallback uses a ZeroMQ transport Windows does not have. Read this
-> as upstream documentation until the port lands; it gets rewritten then.
+> **Port in progress: `core/` is Windows-only now, but this README is not yet rewritten.**
+> A fork of [ResearchMesh](https://github.com/nodormu/ResearchMesh) at commit `9e6959b`.
+> Everything below still describes the Linux original and now contradicts the code in
+> several places — most importantly, **there is no `bash` tool any more**; `powershell`
+> replaces it. The setup steps below are still `apt`, and the `computer`/`interactive_run`
+> sections still describe X11 and `pexpect`. The `core/` module docstrings are accurate;
+> this file is not. Nothing has been run on Windows yet.
 
                     ┌── /think
                     │
