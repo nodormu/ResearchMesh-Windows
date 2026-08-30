@@ -71,7 +71,7 @@ backing is imported inside the function that needs it, and a failed import leave
 sentinel behind (`core/data.py` assigns `_connection` only on success), so the next tool call
 simply retries the import.
 
-See **`README.md`** for the full environment setup — the quick start is at the top, and the collapsed "Full setup detail" section covers the browser download, the optional per-tool packages, and environment variables. (`SETUP.md` was merged into it; the two duplicated ~60% of their content and drifted apart.)
+See **`README.md`** for the full environment setup — step-by-step install is its own "Setup (Windows)" section, and the collapsed "Full setup detail" appendix covers the browser download, the optional per-tool packages, and environment variables. (`SETUP.md` was merged into it; the two duplicated ~60% of their content and drifted apart.)
 
 **One linter is configured: `ruff`.** `pyproject.toml` has a `[tool.ruff.lint]` section, so
 **`ruff check .` should come back clean** — treat that as the bar for an edit. It adds no

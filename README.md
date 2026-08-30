@@ -1,17 +1,17 @@
-# ResearchMesh-Windows, a Windows CLI Research Client for Claude
-
+# ResearchMesh-Windows, a Windows CLI Assistant/Research Client for use with Anthropic API, but can be subsidized as an agent for Claude Code/Desktop
 > *Unofficial, community-built client — not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic.*
 
 > [!NOTE]
 > **Windows only.** `main.py` and `mcp_server.py` refuse to start on anything else rather
-> than half-working. **Not yet run on Windows, though.** A fork of
-> [ResearchMesh](https://github.com/nodormu/ResearchMesh) at commit `9e6959b`, rewritten for
-> Windows. `ruff`, `mypy` and `smoke_test.py` pass and CI runs on `windows-latest`, but those
-> check wiring, not behaviour — no one has sat down at a Windows box and used it yet.
-> `document_convert`, `interactive_run` and `computer` are the three most likely to need a
-> second pass.
+> than half-working. A fork of [ResearchMesh](https://github.com/nodormu/ResearchMesh) at
+> commit `9e6959b`, rewritten for Windows. `ruff`, `mypy` and `smoke_test.py` pass, CI runs
+> on `windows-latest`, and it has since been driven hands-on on a real Windows box too.
+> `computer`'s biggest caveat — it cannot click into an elevated window — has been
+> confirmed directly this way (see **Good to know** below); `document_convert` and
+> `interactive_run` are the two still most worth double-checking in your own environment.
 
                             ┌── /think
+							├── /clear
                             │
                             ├── PowerShell
                             ├── Filesystem
@@ -41,7 +41,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `str_replace_based_edit_tool` | View, create, and edit files. Preserves each file's existing line endings |
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
-| `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#full-setup-detail)) |
+| `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#good-to-know)) |
 | `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` | Headless [Playwright](https://playwright.dev/) — real DOM surfing: renders JavaScript, follows links, fills forms |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
 | `python` | Persistent IPython kernel — **variables survive between calls** |
@@ -52,60 +52,244 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 Claude chooses the tools and keeps working until it has an answer.
 
-## Quick start
+## Good to know
 
-You need **Windows 10 or 11**, **Python 3.11+**, and an Anthropic **API key** — this is an
-API client, so a Claude subscription won't work.
+- **There is no approval prompt.** Claude runs the commands and file edits it decides on, as
+  your user, with no y/n in between. Built for local development. `trash` exists so deletes
+  are at least recoverable.
+- It's your API key: one request can fan out into many tool calls (capped at 30 per turn).
+- `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
+  Chain with `;` in one call, or use `python`, which keeps state.
+- Ask for files by absolute path. If Claude offers a download link instead, tell it you need
+  the file written to disk.
+- Network shares and most removable drives have no Recycle Bin, so deletes there would be
+  permanent — `trash` says so rather than pretending.
+- **`computer` cannot touch an elevated window.** Windows blocks input from a normal process
+  into one running as Administrator (UIPI), so if an elevated terminal, a UAC dialog, Task
+  Manager or some installer has focus, clicks and keystrokes are silently discarded and the
+  screenshot afterwards looks like a click that missed. Typing reports it; clicking cannot.
+  If a sequence has no visible effect, suspect this first. Every other tool is unaffected.
+  Confirmed directly: an ordinary window (e.g. Notepad) takes clicks and menu navigation
+  immediately, while `mmc.exe` (Certificates snap-in, Group Policy, and friends) silently
+  swallows every click the moment Windows has quietly elevated it — which it will, even
+  from a non-admin shell, with no visible UAC prompt on some machines. If `UAC` is off for
+  your account or set to auto-elevate, expect to hit this. Running the whole client
+  elevated fixes it for elevated targets, at the obvious cost of also giving it admin.
+- **`computer` is primary-monitor only** and assumes the client is DPI-aware, which it sets
+  at startup. A second monitor is not captured.
+- If Sonnet gets inconsistent on a complicated multi-tool request, set `model` to an Opus one.
+- Optional packages are imported only when a tool is used, so a missing one breaks just that
+  tool and tells you what to install.
+- If a tool reports a missing package that `requirements.txt` already lists (e.g.
+  `sql_query`'s `duckdb`, or `config_edit`'s `ruamel.yaml`/`jsonpath-ng`), that's not a docs
+  gap — your venv just predates that line. Everything in `requirements.txt` is a `>=` floor
+  rather than a pin (there's no lockfile), so a venv can satisfy it and still miss a package
+  added later. Re-run `pip install -r requirements.txt`; you don't need to restart the app,
+  because each optional package is imported at the moment its tool is called.
+- **Linting: one linter is configured, `ruff`, and `ruff check .` should pass.**
+  `pyproject.toml` has a `[tool.ruff.lint]` section. It adds no rules — it only switches
+  three *off*, each with its reason written next to it, so a clean run is the expected
+  baseline and any finding you do see is genuinely new: your own code, or a rule a newer
+  ruff added. (The rule selection is left at ruff's defaults, which do shift between
+  versions.) Ruff is **not** a dependency and nothing runs it for you — install it yourself
+  if you want it. There's no `[tool.black]` and no `.pylintrc`.
+- **Type checking: `mypy .` should pass too.** `pyproject.toml` has a `[tool.mypy]` section
+  setting exactly one option (`ignore_missing_imports`, because the optional tool backings
+  are lazily imported and legitimately absent from a bare venv); strictness stays at mypy's
+  defaults, so unannotated function bodies aren't checked. It's worth having here because
+  mypy checks against the packages you actually have installed, which makes it the gate that
+  catches a dependency changing shape under you — it named every mcp 1.x → 2.x rename in one
+  run, including the ones in `core/tools.py` that the smoke test can't reach.
+- **`python smoke_test.py` before you commit.** Seconds, no API key, no network, no optional
+  packages. It checks that everything imports, that the tool registry is well-formed, that the
+  tool count in the docs still matches the code, and that `mcp_server.py` completes an MCP
+  handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
+  (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
+- **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
+  — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
+  happens to have `pylint`/`black` installed (neither is a project dependency) they're safe to
+  run by hand — expect plenty of output, since nothing is configured for them.
+- **Two things a linter will fight you on here** — worth knowing before you "fix" them.
+  Broad `except Exception`/`except BaseException` is the design, not sloppiness: every local
+  tool must catch anything and return an error string rather than crash the chat loop, which
+  is why `BLE001` is switched off project-wide. And cleanup paths (`shutdown`, `close`) must
+  not be able to fail *or* fail silently — narrowing one has already caused a real bug, since
+  `zmq.ZMQError` isn't an `OSError` and escaping `shutdown()` turns an ordinary Ctrl-C into a
+  traceback. Blanket catch plus a `print()` is the pattern.
+- ** Using it **
+  For extended thinking, type. **`/think <message>`** gives Claude longer to reason on hard problems;
+  **`/clear`** drops the conversation without restarting the app; **Ctrl-C** exits and shuts everything down cleanly.
 
-**MCP servers are optional.** The `[mcp]` block in `config.toml` ships with
-`enabled = false` and every server commented out, so a fresh clone runs on the 18
-local tools alone. The commented entries are kept as worked examples of both entry
-shapes — the addresses and paths in them are machine-specific, so replace them with
-your own before uncommenting and setting `enabled = true`.
+## Setup (Windows)
 
-`python mcp_client.py` inspects whatever you configure below — it reads the same
-`config.toml` the app does, so there is nothing to edit in the script itself.
+**python 3.14, powershell 7.x and node 24.16 LTS or newer 24.x LTS is required**
+
+### 1) install powershell 7.x and setup linux stuff for windows
+
+- setup powershell 7 as default powershell, do NOT use legacy 5.x, it sucks
+- <https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6>
+- if there is a newer version than 7.6, then look it up in a browser for the newest version link rather than what I have above
+- add a shortcut for powershell 7 to the taskbar, be SURE you select the correct item from Microsoft's ignorant start/window menu
+- if you want to verify yourself, then it probably installed it at: `C:\Program Files\PowerShell\7\pwsh.exe`
+- you can go straight to the folder the file is in: `C:\Program Files\PowerShell\7\`, and right click on pwsh.exe, and Pin to start or add to favorites, whichever you like better
+- right click and launch python 7 as admin
+- type: `wsl-install`
+- exit powershell admin session
+
+### 2) setup npm on windows: <https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-windows>
+
+- download npm-setup.zip (scroll past the antivirus links for checking files)
+- unzip, and run as regular user.
+- check all options
+- install npm
+
+### 3) install node
+
+- open powershell as regular user (and to help everyone, you just type what is inside the ` ` slanted quotes)
+- type: `npm install 24.16` (or newer LTS only)
+- type: `nvm list`
+- type: `nvm use` (whatever newer LTS version, revert to 24.16 if you have issues with newer versions. Stay away from bleeding edge. I tested with 24.16)
+- type: `node -v`
+- type: `npm -v`
+- exit powershell
+
+### 4) install python 3.14
+
+- <https://docs.python.org/3/using/windows.html>
+- use the microsoft store installer, install version 3.14 newest version
+- check all options, if any
+- go to settings -> apps -> advanced app settings -> app execution aliases
+- enable python python.exe (default) # "in the GUI settings"
+- enable python python3.exe (default) # "in the GUI settings"
+- enable Python install manager pymanager.exe # "in the GUI settings"
+- enable Python install manager py.exe # in the "do you understand now? wth"
+- enable Python install manager (windowed) pywmanager.exe # ditto
+- enable Python install manager (windowed) pyw.exe # ditto
+
+### 5) setup your Anthropic API key and the following for your windows environment (so you don't have to put the key in ReserachMesh itself)
+
+- If you use Claude Desktop/Claude Code (node cli) and have a subscription, you will also want an alias so it doesn't use your API key
+- you will have to create a function in your powershell profile
 
 ```powershell
-winget install Python.Python.3.12
+function claude {
+    $oldKey = $env:ANTHROPIC_API_KEY
+    Remove-Item Env:ANTHROPIC_API_KEY -ErrorAction SilentlyContinue
+
+    try {
+        & claude.exe @args
+    }
+    finally {
+        $env:ANTHROPIC_API_KEY = $oldKey
+    }
+}
+```
+
+- BUT FIRST, check whether you have a profile
+- type, as long as you have a user powershell user session open: `$PROFILE`
+- then launch your code editor. I use notepad++ because its awesome, windows notepad sucks because of semi-recent changes they have made to it
+- the output of '$PROFILE' will produce a path to a file for the profile, but it doesn't mean the folder OR file exists if you have never had to have it before
+- if you don't have that folder and file from the output of '$PROFILE', create the folder/file if needed, then open up notepad++, and put following in it.
+- You may have to chatgpt/claude/glm if you can't get it to work with your environment, as i don't how your environment is setup
+- if you do have that profile file, then open it up in notepad++ and add this to the very bottom, you can put notes above it
+- If you don't have a claude code subscription, then don't add the alias function.
+- type or copy/paste the following at the bottom of the profile file:
+
+```powershell
+# ============================================================
+# Anthropic / Claude Configuration
+# ============================================================
+#
+# ANTHROPIC_API_KEY
+#   Available to third-party agents and other applications
+#   that use the Anthropic API.
+#
+# CLAUDE_KERNEL_ENCRYPTION
+#   Requires Claude Kernel encryption.
+#
+# Claude Code
+#   The `claude` function below temporarily removes
+#   ANTHROPIC_API_KEY from Claude Code's environment.
+#
+#   This mirrors the Linux setup:
+#
+#       alias claude='env -u ANTHROPIC_API_KEY claude'
+#
+#   The API key is restored to this PowerShell session
+#   after Claude Code exits.
+# ============================================================
+
+
+# Make the Anthropic API key available to programs launched
+# from this PowerShell session.
+$env:ANTHROPIC_API_KEY = "YOUR_API_KEY_HERE"
+
+# Require Claude Kernel encryption.
+$env:CLAUDE_KERNEL_ENCRYPTION = "required"
+
+
+# ============================================================
+# Claude Code launcher
+# ============================================================
+
+function claude {
+    # Save the API key currently in this PowerShell session.
+    $savedKey = $env:ANTHROPIC_API_KEY
+
+    # Remove it from Claude Code's environment.
+    Remove-Item Env:ANTHROPIC_API_KEY -ErrorAction SilentlyContinue
+
+    try {
+        # Start Claude Code and pass through any arguments.
+        & claude.exe @args
+    }
+    finally {
+        # Restore the API key after Claude Code exits.
+        if ($null -ne $savedKey) {
+            $env:ANTHROPIC_API_KEY = $savedKey
+        }
+    }
+}
+```
+
+- stop copy/pasting above this line after the last '}'. save the file at the path/filename that was output at '$PROFILE' showed if it didn't already exist and you are editting the existing file, then just save it
+
+### 6) open powershell as regular user, check to make sure you launched powershell 7 by typing: `$PSVersionTable.PSVersion`
+
+- create python sandbox, type: `python -m venv pvenv`
+- type: `C:\Users\YOUR USER NAME\Scripts\Activate.ps1`
+- change directory to wherever you want to keep the clone of ReserachMesh-Windows
+- type: `git clone -h` # to see all the git clone options if you did a full install of git on your windows box, not covered in this repo
+- type: `git clone https://github.com/nodormu/ResearchMesh-Windows`
+- type: `cd ResearchMesh-Windows`
+- type: `pip install -r requirements` # hopefully you don't get any errors, conflicts or wheel issues, if so then just chatgpt/claude/glm that issue for a fix, 
+	just be careful about it leading you down rabbit holes of "you must have done this", or "or lets check for sure" etc etc etc and try again. 
+	AIs will feed you BS. Be VERY specific with memories and context before ANY prompt/request.
+- type: `playwright install chromium`
+
+### 6) Install remaining deps while in powershell as regular user
+
+```powershell
 winget install TheDocumentFoundation.LibreOffice   # document_convert
 winget install JohnMacFarlane.Pandoc              # document_convert, markdown path
-
-py -m venv $HOME\researchmesh
-$HOME\researchmesh\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-playwright install chromium           # pip installs the package, not the browser
-
-# Persist the key for future shells, and set it for this one.
-setx ANTHROPIC_API_KEY "sk-ant-..."
-$env:ANTHROPIC_API_KEY = "sk-ant-..."
-
-python main.py
 ```
 
-If PowerShell refuses to run the activation script (`running scripts is disabled on this
-system`), that is the default execution policy, not a broken install:
+### 7) exit powershell in case and restart as regular user just to make it easier instead of establishing environment variables at the CLI
 
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
+- type: `cd C:\Users\YOUR USER NAME\path\to\ResearchMesh-Windows`
+- type: `C:\Users\YOUR USERNAME\pvenv\Scripts\Activate.ps1` # or whatever your python sandbox and $PROFILE file name is if its not Activate.ps1
+- to start the CLI Assistant, type: `python .\main.py`
+- to start the MCP server, type: `python .\mcp_server.py`
+- if you want to utilize ResearchMesh as an MCP Client for usage with the CLI assistant AND/OR MCP server, edit the config.toml for your environment and run either or both above commands and see if you can see the tools in your connected MCP servers. You can have 2 different powershell sessions open so you can run ResearchMesh as an MCP and use the CLI assistant at the same time.
+- if you want to test connection from ResearchMesh-Windows to any MCP servers, then type: `python .\mcp_client` but only if you have node installed for the USER, NOT admin, otherwise it won't work. Besides, what human in their right mind would give control of their Windows Desktop/Workstation over to an AI? Just sayin.
 
-Two things about `winget install` that look like failures and are not: **LibreOffice does
-not add itself to PATH** (this client looks in `C:\Program Files\LibreOffice\program` as
-well), and **pandoc's PATH entry does not reach an already-open shell** — restart it.
+### 8) Test it.
 
-Then just type. **`/think <message>`** gives Claude longer to reason on hard problems;
-**`/clear`** drops the conversation without restarting the app; **Ctrl-C** exits and
-shuts everything down cleanly.
+Now you have a second "you" on your computer as your user. Think about it. Do you ask yourself for approval when you need to open a document or surf to a website? No, you just do it. That's the whole point of ResearchMesh. Its YOU on your computer, allowing you to talk naturally to it while it handles the technical details, however; proper context with prompts can help AI responses zero in on your request. You can change the Anthropic model in the config.toml file also. Have fun. Be safe with this.
 
-**If it starts returning 400s and won't stop, run `/clear`.** Two failures persist for
-the life of the process — an unanswered `tool_use` block, and a conversation past the
-context window — and both make every later turn fail the same way. The error report
-names which one you hit. `/clear` recovers from either while keeping the browser page,
-the kernel, your MCP connections and `/memories`.
+### 9) Important:
 
-**MCP servers are optional** — all 18 local tools work without any of them.
+If it can't do something controlling your mouse and keyboard, it can probably do it with powershell if your user in powershell can do it. UAC may cause you headache getting this to function, so if you have UAC on, it's not much help for you as a project to use a duplicate you. Also, Windows UIPI wil invisibly block synthetic input from a Medium-integrity source into a High-integrity window.
 
 ## Try it
 
@@ -114,9 +298,9 @@ Run Get-ComputerInfo and tell me what build of Windows I'm on.
 
 What's the latest stable Python release? Cite your source.
 
-Open news.ycombinator.com, list the top links, then open the first one and summarise it.
+Open news.ycombinator.com, list the top links, then open the first one and summarize it.
 
-Load C:\Users\me\data.csv and show me the five biggest rows by revenue.
+Run some common read commands about my Windows system through Powershell 7.x and tell me the results.
 
 Write a one-page summary of the Raft consensus algorithm as markdown,
 then convert it to a .docx in my Documents folder.
@@ -338,70 +522,6 @@ Tell it not to write the literal token into anything in the repo.
 
 </details>
 
-## Good to know
-
-- **There is no approval prompt.** Claude runs the commands and file edits it decides on, as
-  your user, with no y/n in between. Built for local development. `trash` exists so deletes
-  are at least recoverable.
-- It's your API key: one request can fan out into many tool calls (capped at 30 per turn).
-- `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
-  Chain with `;` in one call, or use `python`, which keeps state.
-- **Compatibility aliases are removed before each command runs.** `ls`, `cat`, `rm`, `cp`, `mv`, `ps`,
-  `kill`, `diff`, `tee`, `pwd`, `curl` and `wget` ship with PowerShell as compatibility
-  aliases; this client deletes them so reaching for one fails outright instead of failing
-  confusingly on a parameter. Write the cmdlet — `Get-ChildItem`, `Get-Content`,
-  `Remove-Item`. DOS names (`dir`, `type`, `copy`, `del`, `cls`) are untouched.
-- Ask for files by absolute path. If Claude offers a download link instead, tell it you need
-  the file written to disk.
-- Network shares and most removable drives have no Recycle Bin, so deletes there would be
-  permanent — `trash` says so rather than pretending.
-- **`computer` cannot touch an elevated window.** Windows blocks input from a normal process
-  into one running as Administrator (UIPI), so if an elevated terminal, a UAC dialog, Task
-  Manager or some installer has focus, clicks and keystrokes are silently discarded and the
-  screenshot afterwards looks like a click that missed. Typing reports it; clicking cannot.
-  If a sequence has no visible effect, suspect this first. Every other tool is unaffected.
-- **`computer` is primary-monitor only** and assumes the client is DPI-aware, which it sets
-  at startup. A second monitor is not captured.
-- If Sonnet gets inconsistent on a complicated multi-tool request, set `model` to an Opus one.
-- Optional packages are imported only when a tool is used, so a missing one breaks just that
-  tool and tells you what to install.
-- If a tool reports a missing package that `requirements.txt` already lists (e.g.
-  `sql_query`'s `duckdb`, or `config_edit`'s `ruamel.yaml`/`jsonpath-ng`), that's not a docs
-  gap — your venv just predates that line. Everything in `requirements.txt` is a `>=` floor
-  rather than a pin (there's no lockfile), so a venv can satisfy it and still miss a package
-  added later. Re-run `pip install -r requirements.txt`; you don't need to restart the app,
-  because each optional package is imported at the moment its tool is called.
-- **Linting: one linter is configured, `ruff`, and `ruff check .` should pass.**
-  `pyproject.toml` has a `[tool.ruff.lint]` section. It adds no rules — it only switches
-  three *off*, each with its reason written next to it, so a clean run is the expected
-  baseline and any finding you do see is genuinely new: your own code, or a rule a newer
-  ruff added. (The rule selection is left at ruff's defaults, which do shift between
-  versions.) Ruff is **not** a dependency and nothing runs it for you — install it yourself
-  if you want it. There's no `[tool.black]` and no `.pylintrc`.
-- **Type checking: `mypy .` should pass too.** `pyproject.toml` has a `[tool.mypy]` section
-  setting exactly one option (`ignore_missing_imports`, because the optional tool backings
-  are lazily imported and legitimately absent from a bare venv); strictness stays at mypy's
-  defaults, so unannotated function bodies aren't checked. It's worth having here because
-  mypy checks against the packages you actually have installed, which makes it the gate that
-  catches a dependency changing shape under you — it named every mcp 1.x → 2.x rename in one
-  run, including the ones in `core/tools.py` that the smoke test can't reach.
-- **`python smoke_test.py` before you commit.** Seconds, no API key, no network, no optional
-  packages. It checks that everything imports, that the tool registry is well-formed, that the
-  tool count in the docs still matches the code, and that `mcp_server.py` completes an MCP
-  handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
-  (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
-- **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
-  — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
-  happens to have `pylint`/`black` installed (neither is a project dependency) they're safe to
-  run by hand — expect plenty of output, since nothing is configured for them.
-- **Two things a linter will fight you on here** — worth knowing before you "fix" them.
-  Broad `except Exception`/`except BaseException` is the design, not sloppiness: every local
-  tool must catch anything and return an error string rather than crash the chat loop, which
-  is why `BLE001` is switched off project-wide. And cleanup paths (`shutdown`, `close`) must
-  not be able to fail *or* fail silently — narrowing one has already caused a real bug, since
-  `zmq.ZMQError` isn't an `OSError` and escaping `shutdown()` turns an ordinary Ctrl-C into a
-  traceback. Blanket catch plus a `print()` is the pattern.
-
 <a id="full-setup-detail"></a>
 
 <details>
@@ -579,6 +699,8 @@ Check every configured server on its own with `python mcp_client.py` — it conn
 in turn, lists its tools, and reports failures without starting the chat.
 
 </details>
+
+<a id="inspecting-an-mcp-server"></a>
 
 <details>
 <summary><b>Inspecting an MCP server</b> — <code>mcp_client.py</code></summary>
