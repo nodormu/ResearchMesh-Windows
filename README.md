@@ -126,10 +126,10 @@ Claude chooses the tools and keeps working until it has an answer.
 
 ### 1) install powershell 7.x and setup linux stuff for windows
 
-- setup powershell 7 as default powershell, do NOT use legacy 5.x, it sucks
+- setup powershell 7 as default powershell, do NOT use legacy 5.x
 - <https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows?view=powershell-7.6>
 - if there is a newer version than 7.6, then look it up in a browser for the newest version link rather than what I have above
-- add a shortcut for powershell 7 to the taskbar, be SURE you select the correct item from Microsoft's ignorant start/window menu
+- add a shortcut for powershell 7 to the taskbar, be SURE you select the correct item from Microsoft's start/window menu
 - if you want to verify yourself, then it probably installed it at: `C:\Program Files\PowerShell\7\pwsh.exe`
 - you can go straight to the folder the file is in: `C:\Program Files\PowerShell\7\`, and right click on pwsh.exe, and Pin to start or add to favorites, whichever you like better
 - right click and launch python 7 as admin
@@ -138,14 +138,15 @@ Claude chooses the tools and keeps working until it has an answer.
 
 ### 2) setup npm on windows: <https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-windows>
 
-- download npm-setup.zip (scroll past the antivirus links for checking files)
+- download npm-setup.zip (scroll past the antivirus links for checking files) Link below:
+<https://github.com/nvm-windows/nvm/releases>
 - unzip, and run as regular user.
 - check all options
 - install npm
 
 ### 3) install node
 
-- open powershell as regular user (and to help everyone, you just type what is inside the ` ` slanted quotes)
+- open powershell as regular user
 - type: `npm install 24.16` (or newer LTS only)
 - type: `nvm list`
 - type: `nvm use` (whatever newer LTS version, revert to 24.16 if you have issues with newer versions. Stay away from bleeding edge. I tested with 24.16)
@@ -169,7 +170,7 @@ Claude chooses the tools and keeps working until it has an answer.
 ### 5) setup your Anthropic API key and the following for your windows environment (so you don't have to put the key in ReserachMesh itself)
 
 - If you use Claude Desktop/Claude Code (node cli) and have a subscription, you will also want an alias so it doesn't use your API key
-- you will have to create a function in your powershell profile
+- you will have to create a function in your powershell profile, but keep reading before you go copy/pasting.
 
 ```powershell
 function claude {
@@ -185,14 +186,13 @@ function claude {
 }
 ```
 
-- BUT FIRST, check whether you have a profile
-- type, as long as you have a user powershell user session open: `$PROFILE`
-- then launch your code editor. I use notepad++ because its awesome, windows notepad sucks because of semi-recent changes they have made to it
-- the output of '$PROFILE' will produce a path to a file for the profile, but it doesn't mean the folder OR file exists if you have never had to have it before
-- if you don't have that folder and file from the output of '$PROFILE', create the folder/file if needed, then open up notepad++, and put following in it.
-- You may have to chatgpt/claude/glm if you can't get it to work with your environment, as i don't how your environment is setup
-- if you do have that profile file, then open it up in notepad++ and add this to the very bottom, you can put notes above it
-- If you don't have a claude code subscription, then don't add the alias function.
+- BUT FIRST, check whether you have a profile.
+- Go here and get an API key and throw 20 bucks at it to test with:  https://platform.claude.com/dashboard 
+- type in powershell as user: `$PROFILE`
+- then launch your code editor. notepad++ or VS-Code will work fine.
+- the output of `$PROFILE` will produce a path to a file for the profile, but it doesn't mean the folder OR file exists if you have never had to have it before
+- if you don't have that folder and file from the output of `$PROFILE`, create the folder/file if needed, or open the existing file, then open it up notepad++
+- TIP:  If you don't have a claude code subscription and don't plan on one, then don't add the alias function.
 - type or copy/paste the following at the bottom of the profile file:
 
 ```powershell
@@ -251,13 +251,12 @@ function claude {
     }
 }
 ```
-
-- stop copy/pasting above this line after the last '}'. save the file at the path/filename that was output at '$PROFILE' showed if it didn't already exist and you are editting the existing file, then just save it
+- save the file
 
 ### 6) open powershell as regular user, check to make sure you launched powershell 7 by typing: `$PSVersionTable.PSVersion`
 
 - create python sandbox, type: `python -m venv pvenv`
-- type: `C:\Users\YOUR USER NAME\Scripts\Activate.ps1`
+- type: `C:\Users\YOUR USER NAME\Scripts\Activate.ps1` # or whatever the path is to your pvenv enviroment
 - change directory to wherever you want to keep the clone of ReserachMesh-Windows
 - type: `git clone -h` # to see all the git clone options if you did a full install of git on your windows box, not covered in this repo
 - type: `git clone https://github.com/nodormu/ResearchMesh-Windows`
@@ -270,8 +269,8 @@ function claude {
 ### 6) Install remaining deps while in powershell as regular user
 
 ```powershell
-winget install TheDocumentFoundation.LibreOffice   # document_convert
-winget install JohnMacFarlane.Pandoc              # document_convert, markdown path
+winget install TheDocumentFoundation.LibreOffice # for document_convert, or leave this out if use 365
+winget install JohnMacFarlane.Pandoc             # for document_convert, for libreoffice and/or 365
 ```
 
 ### 7) exit powershell in case and restart as regular user just to make it easier instead of establishing environment variables at the CLI
@@ -287,31 +286,31 @@ winget install JohnMacFarlane.Pandoc              # document_convert, markdown p
 
 Now you have a second "you" on your computer as your user. Think about it. Do you ask yourself for approval when you need to open a document or surf to a website? No, you just do it. That's the whole point of ResearchMesh. Its YOU on your computer, allowing you to talk naturally to it while it handles the technical details, however; proper context with prompts can help AI responses zero in on your request. You can change the Anthropic model in the config.toml file also. Have fun. Be safe with this.
 
+To utilize CLI Assistant, go to your python pvenv and type
+`python main.py`
+To expose it as an MCP server for Claude Code or whatever you want to access it with, type
+`python mcp_server`
+If you want to see SSL options, type
+`python mcp_server --help`
+Need to test you MCP servers that are connected to ResearchMesh? (requires node), type
+`python mcp_client` and of course `python mcp_client --help` for help file
+
+Here are some tests you can try at the CLI assistant once you throw 20 bucks at Anthropic API to test with.
+a) Export the first certificate found in certmgr.exe with powershell and put it on my desktop
+b) Open Edge and look up the latest news headlines for the United States.
+c) Go to news.ycominator.com via DOM based surfing, open the top #1 article, and summarize it.
+NOTE:  This is an example of AI surfing the net without loading a visible browser or controlling your GUI.
+d) Open the link for the article you just summarized so I can see it in my default browser.
+e) Open Notepad and type, "Hello, I am controlling your mouse and keyboard.", save it to desktop, then export as PDF, also saved to the desktop.
+TIP:  Don't use the mouse and keyboard while its trying to, as this just makes it difficult for the AI.
+f) Give me a Cisco IOS 17.15 config for a 9200 24-port switch. Set VTP to client so my VLAN
+database isn't overwritten on the network its connecting to with two uplinks active/standby at 1 Gbps, 
+all 24 ports up and ready for voice + data VLANs to be pushed from the VLAN server with the uplink trunk 
+on VLAN 100. Note what I need to change for my environment, then write it to my Desktop in a plain text file.
+
 ### 9) Important:
 
 If it can't do something controlling your mouse and keyboard, it can probably do it with powershell if your user in powershell can do it. UAC may cause you headache getting this to function, so if you have UAC on, it's not much help for you as a project to use a duplicate you. Also, Windows UIPI wil invisibly block synthetic input from a Medium-integrity source into a High-integrity window.
-
-## Try it
-
-```
-Run Get-ComputerInfo and tell me what build of Windows I'm on.
-
-What's the latest stable Python release? Cite your source.
-
-Open news.ycombinator.com, list the top links, then open the first one and summarize it.
-
-Run some common read commands about my Windows system through Powershell 7.x and tell me the results.
-
-Write a one-page summary of the Raft consensus algorithm as markdown,
-then convert it to a .docx in my Documents folder.
-
-Give me a Cisco IOS 17.15 config for a 9200 24-port switch: VTP client so my VLAN
-database isn't overwritten, two uplinks active/standby at 1 Gbps, all 24 ports up and
-ready for voice + data VLANs pushed from the VLAN server, uplink trunk on VLAN 100.
-Note what I need to change for my environment, then write it to my Desktop.
-
-What is the airspeed velocity of an unladen swallow?
-```
 
 ## Configuration
 
@@ -397,6 +396,7 @@ claude mcp add researchmesh --scope user `
   --env ANTHROPIC_API_KEY="$env:ANTHROPIC_API_KEY" `
   -- "$HOME\researchmesh\Scripts\python.exe" C:\path\to\ResearchMesh-Windows\mcp_server.py
 ```
+If you put your key in your `$PROFILE` then you don't have to set the `env` as shown above.
 
 That's it — no token, no ports, nothing to start. Claude Code launches the server itself when
 it needs it. Then just ask it to delegate something: *"use researchmesh to take a screenshot
