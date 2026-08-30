@@ -11,7 +11,7 @@
 > `interactive_run` are the two still most worth double-checking in your own environment.
 
                             ┌── /think
-							├── /clear
+						              	├── /clear
                             │
                             ├── PowerShell
                             ├── Filesystem
