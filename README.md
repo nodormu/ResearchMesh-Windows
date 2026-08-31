@@ -147,7 +147,7 @@ Claude chooses the tools and keeps working until it has an answer.
 ### 3) install node
 
 - open powershell as regular user
-- type: `npm install 24.16` (or newer LTS only)
+- type: `nvm install 24.16` (or newer LTS only)
 - type: `nvm list`
 - type: `nvm use` (whatever newer LTS version, revert to 24.16 if you have issues with newer versions. Stay away from bleeding edge. I tested with 24.16)
 - type: `node -v`
@@ -256,13 +256,17 @@ function claude {
 ### 6) open powershell as regular user, check to make sure you launched powershell 7 by typing: `$PSVersionTable.PSVersion`
 
 - create python sandbox, type: `python -m venv pvenv`
-- type: `C:\Users\YOUR USER NAME\Scripts\Activate.ps1` # or whatever the path is to your pvenv enviroment
+- type: `C:\Users\YOURUSERNAME\pvenv\Scripts\Activate.ps1` # or whatever the path is to your pvenv enviroment
 - change directory to wherever you want to keep the clone of ReserachMesh-Windows
+- Install git in powershell 7. Open up Powershell 7 as a regular user, type: 
+`winget install --id Git.Git -e --source winget`
+OR if you prefer the alternative post-git module
+`Install-Module posh-git -Scope CurrentUser -Force`
 - type: `git clone -h` # to see all the git clone options if you did a full install of git on your windows box, not covered in this repo
 - type: `git clone https://github.com/nodormu/ResearchMesh-Windows`
 - type: `cd ResearchMesh-Windows`
 - type: `pip install -r requirements` # hopefully you don't get any errors, conflicts or wheel issues, if so then just chatgpt/claude/glm that issue for a fix, 
-	just be careful about it leading you down rabbit holes of "you must have done this", or "or lets check for sure" etc etc etc and try again. 
+	just be careful about it leading you down rabbit holes of "you must have done this", or "or lets check for sure" etc etc etc and try again.
 	AIs will feed you BS. Be VERY specific with memories and context before ANY prompt/request.
 - type: `playwright install chromium`
 
@@ -280,7 +284,8 @@ winget install JohnMacFarlane.Pandoc             # for document_convert, for lib
 - to start the CLI Assistant, type: `python .\main.py`
 - to start the MCP server, type: `python .\mcp_server.py`
 - if you want to utilize ResearchMesh as an MCP Client for usage with the CLI assistant AND/OR MCP server, edit the config.toml for your environment and run either or both above commands and see if you can see the tools in your connected MCP servers. You can have 2 different powershell sessions open so you can run ResearchMesh as an MCP and use the CLI assistant at the same time.
-- if you want to test connection from ResearchMesh-Windows to any MCP servers, then type: `python .\mcp_client` but only if you have node installed for the USER, NOT admin, otherwise it won't work. Besides, what human in their right mind would give control of their Windows Desktop/Workstation over to an AI? Just sayin.
+- if you want to test connection from ResearchMesh-Windows to any MCP servers, then type: 
+`python .\mcp_client` Be sure you have node installed for the user the Agent is running on. I advise against putting the ResearchMesh-Windows Agent on under the root Admin user, and just use your regular user account.
 
 ### 8) Test it.
 
