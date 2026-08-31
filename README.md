@@ -133,7 +133,7 @@ Claude chooses the tools and keeps working until it has an answer.
 - if you want to verify yourself, then it probably installed it at: `C:\Program Files\PowerShell\7\pwsh.exe`
 - you can go straight to the folder the file is in: `C:\Program Files\PowerShell\7\`, and right click on pwsh.exe, and Pin to start or add to favorites, whichever you like better
 - right click and launch python 7 as admin
-- type: `wsl-install`
+- type: `wsl --install`
 - exit powershell admin session
 
 ### 2) setup npm on windows: <https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-windows>
