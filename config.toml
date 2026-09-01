@@ -144,7 +144,7 @@ servers = [
 # `model` entirely — most single-model servers do, so drop that line if yours
 # does too:
 # url = "http://192.168.2.12:8080/v1/embeddings"
-# model = "nomic-embed-text"
+# model = "nomic-embed"
 # request_format = "openai"
 # api_key_env = "EMBEDDINGS_API_KEY"
 # timeout = 30
