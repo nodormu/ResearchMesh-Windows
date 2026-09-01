@@ -139,8 +139,11 @@ servers = [
 #
 # The example below instead points at a self-hosted server on the LAN — swap
 # in whatever you actually run (same 192.168.2.12 example host used by the
-# n8n/alpaca entries above):
-# url = "http://192.168.2.12:8081/v1/embeddings"
+# n8n/alpaca entries above). This is the shape the tool was verified against:
+# llama.cpp's `llama-server` serving a nomic embedding model, which ignores
+# `model` entirely — most single-model servers do, so drop that line if yours
+# does too:
+# url = "http://192.168.2.12:8080/v1/embeddings"
 # model = "nomic-embed-text"
 # request_format = "openai"
 # api_key_env = "EMBEDDINGS_API_KEY"
