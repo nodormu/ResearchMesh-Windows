@@ -23,6 +23,7 @@ from core import (
     memory,
     powershell,
     processes,
+    text_embeddings,
 )
 from core import claude_learned_schemas as learned
 
@@ -38,6 +39,7 @@ MODULES = [
     config_edit,  # comment-preserving YAML/TOML/JSON edits
     data,        # DuckDB
     files,       # trash
+    text_embeddings,  # vector embeddings from a user-supplied HTTP server
 ]
 
 TOOLS = [tool for module in MODULES for tool in module.TOOLS]
