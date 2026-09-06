@@ -33,7 +33,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**19 local tools**, plus whatever your MCP servers expose:
+**20 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -50,6 +50,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `sql_query` | DuckDB straight against CSV/Parquet/JSON — no import step |
 | `trash` | Recoverable deletes to the Recycle Bin. `Remove-Item` bypasses it entirely and has no switch to use it, so this is the only undo you get |
 | `text_embeddings` | Vector embeddings from an HTTP embedding server you configure — self-hosted or a paid API both work. See `[embeddings]` in config.toml for worked examples |
+| `vision_query` | Ask a question about an image via a vision-capable chat server you configure — self-hosted or a paid API both work. See `[vision]` in config.toml for worked examples |
 
 Claude chooses the tools and keeps working until it has an answer.
 
@@ -377,6 +378,7 @@ those you edit by hand.
 | `CLAUDE_DISPLAY_SIZE` | Logical screen size `computer` reports, e.g. `1280x800` |
 | `CLAUDE_KERNEL_ENCRYPTION` | `auto` (default) encrypts the `python` kernel's sockets with CurveZMQ and falls back if it can't; `required` fails the tool instead of running unencrypted; `off` skips it |
 | *(embeddings server)* | Whatever `[embeddings].api_key_env` names, if your server needs auth |
+| *(vision server)* | Whatever `[vision].api_key_env` names, if your server needs auth |
 
 ## MCP, in both directions
 
@@ -387,7 +389,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            19 local tools           [mcp] in config.toml
+     mcp_server.py            20 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
@@ -686,6 +688,7 @@ core/
   data.py                        DuckDB queries
   files.py                       recoverable deletes
   text_embeddings.py             vector embeddings from a private HTTP server
+  vision.py                      vision-capable image queries against a private HTTP server
   output.py                      shared output trimming + image results
   cli.py                         prompt_toolkit REPL
 ```

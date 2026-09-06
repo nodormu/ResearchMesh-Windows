@@ -24,6 +24,7 @@ from core import (
     powershell,
     processes,
     text_embeddings,
+    vision,
 )
 from core import claude_learned_schemas as learned
 
@@ -40,6 +41,7 @@ MODULES = [
     data,        # DuckDB
     files,       # trash
     text_embeddings,  # vector embeddings from a user-supplied HTTP server
+    vision,       # vision-capable image queries from a user-supplied HTTP server
 ]
 
 TOOLS = [tool for module in MODULES for tool in module.TOOLS]
