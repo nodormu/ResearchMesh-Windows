@@ -147,7 +147,7 @@ servers = [
 # model = "nomic-embed"
 # request_format = "openai"
 # api_key_env = "EMBEDDINGS_API_KEY"
-# timeout = 30
+# timeout = 60
 
 [vision]
 # Same self-hosting motivation as [embeddings] above, for a different
@@ -245,10 +245,10 @@ servers = [
 #
 # enabled = true
 # voice_model = "C:/Users/%USERNAME%/piper-voices/en_US-lessac-medium.onnx"
-# sink = "Headphones"
+# sink = "Razer"
 # timeout = 30
-enabled = true
-voice_model = "C:/Users/invent/piper-voices/en_US-lessac-medium.onnx"
+# enabled = true
+# voice_model = "C:/Users/invent/piper-voices/en_US-lessac-medium.onnx"
 
 [listen]
 # Local speech-to-text: the `listen` tool records a bounded window from
@@ -290,4 +290,4 @@ voice_model = "C:/Users/invent/piper-voices/en_US-lessac-medium.onnx"
 # max_duration_seconds = 30
 # model_size = "base"
 # samplerate = 16000
-enabled = true
+# enabled = true
