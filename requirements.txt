@@ -54,6 +54,25 @@ httpx>=0.24              # `text_embeddings` — calls your own HTTP embedding s
                          # `anthropic` above; listed explicitly since this module imports
                          # it directly rather than through the SDK.
 
+# `speak`/`listen` — fully local voice I/O, no cloud STT/TTS. Ported from the
+# Linux client's parecord/paplay/`python3 -m piper` subprocess calls to
+# in-process calls against these packages instead — see core/speak.py and
+# core/listen.py module docstrings for the full reasoning. Both tools are
+# declared either way and return a {"status": "not_configured", ...} result
+# until [speak]/[listen] in config.toml are set up (listen actually needs no
+# config at all if a default microphone exists — see its docstring).
+piper-tts>=1.8           # `speak` — local neural TTS (core/speak.py), used via the
+                         # `piper.PiperVoice` Python API, not the `piper` CLI binary.
+                         # NOT `sudo apt install piper`/similar — unrelated project,
+                         # same name, only applies to Linux anyway.
+faster-whisper>=1.0      # `listen` — local CPU speech-to-text (core/listen.py), via
+                         # `faster_whisper.WhisperModel` directly — no CLI entry point.
+sounddevice>=0.5         # `speak`/`listen` — audio playback and microphone capture on
+                         # Windows (core/speak.py, core/listen.py). Needs no system
+                         # packages; wraps PortAudio, which ships inside the wheel.
+soundfile>=0.12          # `speak`/`listen` — reads/writes the temp WAV files both
+                         # tools pass between synthesis/capture and playback/transcription.
+
 # `memory` needs nothing beyond the standard library (core/memory.py).
 
 # --- system binaries, not pip ------------------------------------------------

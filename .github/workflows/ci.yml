@@ -11,10 +11,12 @@ name: CI
 # reaching the Anthropic API.
 #
 # Both jobs run on Windows, because that is the only platform this project
-# targets. This is also currently the only place the code runs on Windows at
-# all — it has never been executed by hand on the real thing — so treat a green
-# run as "it imports, wires up and handshakes", which is more than nothing and
-# well short of "the tools work".
+# targets. This was originally the only place the code ran on Windows at all;
+# it has since been driven hands-on on a real Windows box too, confirming
+# `computer`, `speak`/`listen`, `document_convert` and `interactive_run` all
+# actually work — but CI itself still only checks the wiring, not the tools'
+# real-world behaviour, so treat a green run here as "it imports, wires up and
+# handshakes", which is more than nothing and well short of "the tools work".
 
 on:
   push:

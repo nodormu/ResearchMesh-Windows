@@ -209,3 +209,85 @@ servers = [
 # max_tokens = 4000
 # timeout = 180
 # api_key_env = "VISION_API_KEY"
+
+[speak]
+# Local text-to-speech: the `speak` tool synthesizes text with your own
+# Piper voice model and plays it back through your default (or chosen)
+# audio output device. Nothing is sent anywhere — this is 100% local,
+# unlike [embeddings]/[vision] above which call an HTTP server. It does
+# nothing until `voice_model` below is set. See core/speak.py's module
+# docstring for the full reasoning, including why this Windows port
+# synthesizes in-process via `piper.PiperVoice` and plays back with
+# `sounddevice`/`soundfile`, rather than shelling out the way the Linux
+# version does (`python3 -m piper` + `paplay`, neither of which has a
+# Windows equivalent).
+#
+#   enabled       set to false to mute speak entirely without touching
+#                 voice_model (default true).
+#   voice_model   path to a Piper .onnx voice file. Requires a matching
+#                 sidecar at "<voice_model>.json" (Piper's own convention).
+#                 Download voices from
+#                 https://github.com/rhasspy/piper/blob/master/VOICES.md —
+#                 grab both the .onnx and .onnx.json for the same voice.
+#                 Overridable per call via the tool's `voice` argument.
+#   sink          optional sounddevice OUTPUT device: a numeric index or a
+#                 substring of the device name (see `python -m sounddevice`
+#                 to list what Windows sees). Leave unset to play through
+#                 the system default output device.
+#   timeout       seconds before an in-progress playback is force-stopped
+#                 as a safety cap (default 30). Synthesis itself has no
+#                 separate timeout — it's bounded by text length, not by a
+#                 subprocess that can hang.
+#
+# Backslashes: TOML treats `\` as an escape in a basic "quoted" string, so
+# "C:\Users\me\voice.onnx" is invalid TOML — use forward slashes
+# ("C:/Users/me/voice.onnx") or a literal single-quoted string instead.
+#
+# enabled = true
+# voice_model = "C:/Users/%USERNAME%/piper-voices/en_US-lessac-medium.onnx"
+# sink = "Headphones"
+# timeout = 30
+enabled = true
+voice_model = "C:/Users/invent/piper-voices/en_US-lessac-medium.onnx"
+
+[listen]
+# Local speech-to-text: the `listen` tool records a bounded window from
+# your microphone and transcribes it with `faster-whisper`, entirely on
+# CPU — no cloud STT. Nothing is sent anywhere. Unlike the Linux version,
+# `device` is OPTIONAL here: Windows/sounddevice already has a working
+# notion of a default input device, so this can work with NO configuration
+# at all as long as a microphone exists. See core/listen.py's module
+# docstring for the full reasoning, including why capture goes through
+# `sounddevice.rec(...)` in-process rather than shelling out to
+# `parecord`/`timeout` the way the Linux version does (neither exists on
+# Windows, and there's no PipeWire source-name concept to configure here).
+#
+#   enabled                  set to false to keep the microphone closed
+#                             entirely without touching `device` (default
+#                             true).
+#   device                   optional sounddevice INPUT device: a numeric
+#                             index or a substring of the device name (see
+#                             `python -m sounddevice` to list what Windows
+#                             sees). Leave unset to use the system default
+#                             microphone. Overridable per call via the
+#                             tool's `device` argument.
+#   default_duration_seconds how long to record when the tool call doesn't
+#                             specify `duration_seconds` (default 8).
+#   max_duration_seconds     hard safety cap regardless of what's
+#                             requested, tool call or config (default 30).
+#   model_size                faster-whisper model size — "tiny", "base",
+#                             "small", "medium", "large-v3", etc. Bigger is
+#                             more accurate and slower; "base" is a
+#                             reasonable CPU default (default "base").
+#   samplerate                capture sample rate in Hz (default 16000,
+#                             which is what Whisper models are trained on —
+#                             no reason to raise this unless a specific
+#                             microphone refuses to open at 16kHz).
+#
+# enabled = true
+# device = "Razer"
+# default_duration_seconds = 8
+# max_duration_seconds = 30
+# model_size = "base"
+# samplerate = 16000
+enabled = true

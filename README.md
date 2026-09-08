@@ -7,8 +7,14 @@
 > commit `9e6959b`, rewritten for Windows. `ruff`, `mypy` and `smoke_test.py` pass, CI runs
 > on `windows-latest`, and it has since been driven hands-on on a real Windows box too.
 > `computer`'s biggest caveat — it cannot click into an elevated window — has been
-> confirmed directly this way (see **Good to know** below); `document_convert` and
-> `interactive_run` are the two still most worth double-checking in your own environment.
+> confirmed directly this way (see **Good to know** below); so have `speak`/`listen`
+> (real TTS played out loud through the system's default output device, and a real
+> microphone recording correctly transcribed, both end-to-end with no device configured
+> beyond a Piper voice model path); and so have `document_convert` (a real markdown file
+> converted to a real PDF via pandoc+soffice) and `interactive_run` (a real prompt
+> answered end-to-end via a spawned PowerShell script). All five of the tools most likely
+> to behave differently in practice than on paper have now been hands-on verified on a
+> real Windows box.
 
                             ┌── /think
 						    ├── /clear
@@ -33,7 +39,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**20 local tools**, plus whatever your MCP servers expose:
+**22 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -51,8 +57,15 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `trash` | Recoverable deletes to the Recycle Bin. `Remove-Item` bypasses it entirely and has no switch to use it, so this is the only undo you get |
 | `text_embeddings` | Vector embeddings from an HTTP embedding server you configure — self-hosted or a paid API both work. See `[embeddings]` in config.toml for worked examples |
 | `vision_query` | Ask a question about an image via a vision-capable chat server you configure — self-hosted or a paid API both work. See `[vision]` in config.toml for worked examples |
+| `speak` | Speak text aloud through your own local Piper voice model, played back on your configured audio output. 100% local — no server, no cloud TTS. See `[speak]` in config.toml |
+| `listen` | Record from your microphone for a bounded window and transcribe it locally via faster-whisper. 100% local — no cloud STT. See `[listen]` in config.toml |
 
-Claude chooses the tools and keeps working until it has an answer.
+Claude chooses the tools and keeps working until it has an answer. On top of the tools
+themselves, the REPL has two voice-related commands of its own: `/voice on|off` toggles
+whether Claude's replies are also spoken aloud (via `speak`), and `/listen [seconds]`
+records a window from your microphone, transcribes it, and auto-submits the transcript as
+your next turn — both reuse the same `speak`/`listen` tool code, just invoked directly from
+the REPL instead of by Claude.
 
 ## Good to know
 
@@ -389,7 +402,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            20 local tools           [mcp] in config.toml
+     mcp_server.py            22 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
