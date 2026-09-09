@@ -22,6 +22,7 @@ from core import (
     kernel,
     listen,
     memory,
+    midi1,
     powershell,
     processes,
     speak,
@@ -46,6 +47,19 @@ MODULES = [
     vision,       # vision-capable image queries from a user-supplied HTTP server
     speak,        # local text-to-speech via Piper, config-driven
     listen,       # local speech-to-text via faster-whisper, config-driven
+    midi1,        # MIDI 1.0 device I/O via mido/python-rtmidi — device
+                  # discovery, open/close/send/poll (poll carries real
+                  # per-message timestamps and an optional blocking wait),
+                  # every standard channel/System-Common/System-Real-Time
+                  # message, generic SysEx, full .mid/.syx file read+write,
+                  # and a large set of typed SysEx convenience messages
+                  # (MTC incl. Quarter Frame and NAK, MMC incl. the full
+                  # Information-Field register/masked_write and a
+                  # decode_mmc_response action, MSC, RPN/NRPN, General
+                  # MIDI system, device inquiry/control, channel mode,
+                  # MIDI tuning, notation, and more). midi2 (MIDI 2.0/UMP)
+                  # was removed from this project and moved to its own
+                  # standalone project for further work.
 ]
 
 TOOLS = [tool for module in MODULES for tool in module.TOOLS]
@@ -83,6 +97,7 @@ async def shutdown():
         ("browser", browser.shutdown),
         ("kernel", kernel.shutdown),
         ("sql_query", data.close),
+        ("midi1", midi1.close_all),
     ):
         try:
             result = close()

@@ -73,6 +73,20 @@ sounddevice>=0.5         # `speak`/`listen` — audio playback and microphone ca
 soundfile>=0.12          # `speak`/`listen` — reads/writes the temp WAV files both
                          # tools pass between synthesis/capture and playback/transcription.
 
+mido[ports-rtmidi]>=1.3  # `midi1` — MIDI 1.0 device I/O (core/midi1.py), ported
+                         # byte-identical from the Linux client — the only OS-specific
+                         # code is one illustrative comment, since `mido`/`python-rtmidi`
+                         # already speak the same API over WinMM/WinRT here as they do
+                         # over ALSA/JACK on Linux or CoreMIDI on macOS. The
+                         # `[ports-rtmidi]` extra pulls in `python-rtmidi`, mido's actual
+                         # port-I/O backend — plain `mido` alone can build/parse messages
+                         # and read/write .mid files but can't open a real port.
+                         # python-rtmidi ships prebuilt wheels for Windows, so this
+                         # normally needs no compiler. Import is guarded (try/except at
+                         # module load, checked once in the dispatcher): missing this
+                         # only disables `midi1`, same "declares itself, returns an
+                         # install hint" contract as every other tool in this section.
+
 # `memory` needs nothing beyond the standard library (core/memory.py).
 
 # --- system binaries, not pip ------------------------------------------------

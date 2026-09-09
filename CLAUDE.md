@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-ResearchMesh-Windows is a command-line chat client for the Anthropic API, built on the Model Context Protocol (MCP). The CLI talks to Claude and to one or more MCP servers, and additionally gives Claude **22 local tools** — Anthropic's built-in "learned" schemas (text editor, web search/fetch, cross-session memory, computer use) plus custom ones for PowerShell, DOM browsing, document conversion, stateful Python, interactive commands, config editing, SQL, recoverable deletes, vector embeddings from a user-supplied private server, vision-capable image queries against a user-supplied private server, local text-to-speech via Piper, and local speech-to-text via faster-whisper. It began as a learning/tutorial project (a Skilljar submodule) but has since been rewired to connect to any number of external MCP servers over Streamable HTTP, declared as a list under `[mcp]` in `config.toml`, instead of the original bundled stdio document server.
+ResearchMesh-Windows is a command-line chat client for the Anthropic API, built on the Model Context Protocol (MCP). The CLI talks to Claude and to one or more MCP servers, and additionally gives Claude **23 local tools** — Anthropic's built-in "learned" schemas (text editor, web search/fetch, cross-session memory, computer use) plus custom ones for PowerShell, DOM browsing, document conversion, stateful Python, interactive commands, config editing, SQL, recoverable deletes, vector embeddings from a user-supplied private server, vision-capable image queries against a user-supplied private server, local text-to-speech via Piper, local speech-to-text via faster-whisper, and MIDI 1.0 device I/O via mido/python-rtmidi (channel/system messages, SysEx, `.mid`/`.syx` file read+write). It began as a learning/tutorial project (a Skilljar submodule) but has since been rewired to connect to any number of external MCP servers over Streamable HTTP, declared as a list under `[mcp]` in `config.toml`, instead of the original bundled stdio document server.
 
 **This is a Windows-only fork** of [ResearchMesh](https://github.com/nodormu/ResearchMesh), taken at commit `9e6959b`. Windows is assumed outright. There are **no compatibility branches anywhere** — nothing checks the platform in order to behave differently. The only three `sys.platform` references in the repository are assertions that this *is* Windows: `main.py` and `mcp_server.py` refuse to start elsewhere (`require_windows`), and `smoke_test.py` skips the one check that cannot run off-platform. Do not add a fourth that branches, and do not reintroduce shell idioms from other operating systems — if something looks written for a different OS, it is a bug, not compatibility.
 
@@ -278,6 +278,68 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   field so this holds even in a fresh session. Needs no `ctypes`, no path-separator
   handling, and no platform branch of its own — it's pure `httpx` + `tomllib`, same
   shape as `text_embeddings` above.
+
+- **`core/speak.py`** — `speak`: text-to-speech through a local Piper voice model,
+  config-driven under `[speak]` like `vision`/`text_embeddings` above, with the same
+  two-reason non-raising decline shape (`"disabled"` — `[speak].enabled` is false,
+  checked before anything else touches the filesystem or an audio device; and
+  `"not_configured"` — `voice_model` unset or its file, or its required
+  `<voice_model>.json` sidecar, doesn't exist). **A genuine platform divergence from the
+  Linux client, not just a transport swap**: Linux's `speak.py` shells out to two
+  subprocesses (`python3 -m piper`, then `paplay`) because Piper only exposes a CLI
+  entry point there; the `piper-tts` PyPI package also ships a real Python API
+  (`piper.PiperVoice`), so this port synthesizes IN-PROCESS
+  (`PiperVoice.load(...).synthesize_wav(...)`) and plays the result back with
+  `sounddevice`/`soundfile` instead — `paplay` and PipeWire/PulseAudio sink names have
+  no Windows equivalent. `sink`, if set, is a `sounddevice` output device index or a
+  name substring (`python -m sounddevice` to list devices); optional, since Windows
+  already has a working default output device with no configuration. Settings are
+  re-read from `config.toml` on every call, no restart needed.
+
+- **`core/listen.py`** — `listen`: records from the microphone and transcribes it
+  in-process with `faster-whisper` (`WhisperModel(...).transcribe(...)`, CPU/CTranslate2
+  — a library with no CLI entry point, so no second subprocess either way). Same
+  `"disabled"`/`"not_configured"` status-field pattern as `speak.py` (`[listen].enabled`
+  checked before `device`). **Platform divergence**: Linux's `listen.py` shells out to
+  `timeout <N> parecord ...` against a named PipeWire source; Windows has neither
+  PipeWire nor `parecord`, so capture here goes through `sounddevice.rec(...)` entirely
+  in-process, with `soundfile` writing the temp WAV. `device` is consequently OPTIONAL
+  here (unlike the Linux version, where a PipeWire source name is mandatory) —
+  `sounddevice` already has a working default-input-device concept, so it "just works"
+  against system default audio with `[listen]` left at defaults; set `device` (a numeric
+  index or a name substring) only to pin a specific microphone. `model_size` (default
+  `"base"`), `default_duration_seconds` (default 8), and `max_duration_seconds` (default
+  30, a hard cap) all come from `[listen]`, re-read fresh per call.
+
+- **`core/midi1.py`** — `midi1`: MIDI 1.0 device discovery and I/O via
+  `mido[ports-rtmidi]` (python-rtmidi backend), ported byte-identical from the Linux
+  client — the only change is one illustrative comment, since `mido`/`python-rtmidi`
+  already speak the same cross-platform API over WinMM/WinRT here as they do over
+  ALSA/JACK on Linux, so no functional Windows branch was needed. `list_devices`/
+  `open`/`close`/`send`/`poll` cover named-port discovery and channel/System-Common/
+  System-Real-Time messages plus generic SysEx; `poll` captures every incoming message
+  via a custom callback registered at `open` time (not at poll-call time) into a
+  bounded per-handle `deque` with a real wall-clock `received_at` timestamp, and can
+  either return instantly with whatever's buffered or block with a caller-specified
+  `timeout_seconds` via a `threading.Event`. A large family of typed convenience
+  messages (`mtc_full`, `mmc` — including the full Information-Field register,
+  `masked_write`, and a `decode_mmc_response` action — `msc`, `rpn`/`nrpn`, `gm_system`,
+  `device_inquiry`/`device_control`, `channel_mode`, `midi_tuning`, `notation`,
+  `mtc_cueing`/`mtc_cueing_nrt`, `file_dump`, `mtc_nak`, and
+  `mtc_quarter_frame_sequence`) are all built as validated payloads on top of the same
+  generic `sysex` mechanism rather than as separate code paths, plus full `.mid`/`.syx`
+  file read+write via `mido.MidiFile`/raw SysEx framing. Every hardware-touching call
+  (`open`/`send`/`close`, and now `poll` when it blocks) runs through
+  `asyncio.wait_for(asyncio.to_thread(...), timeout=...)` so a hung driver or
+  misbehaving device can't wedge the caller forever — a known, stated limitation is that
+  this bounds the *caller's* wait but cannot kill the underlying OS thread, which is why
+  `poll`'s own blocking `timeout_seconds` is capped at 60s. `close_all()` is wired into
+  `local_tools.shutdown()` so open ports are released on exit. `active_sensing` can be
+  sent but never appears in `poll` results — mido's rtmidi backend hardcodes it out at
+  the library level, not fixable without bypassing mido. A companion MIDI 2.0/UMP tool
+  was developed alongside this one on the Linux client but has since been removed from
+  that project and moved to its own standalone project — this port only carries MIDI 1.0
+  forward, matching the Linux client's own current scope.
 
 - **`core/output.py`** — `clip(text, limit)`, the one truncation helper the local tool modules share (shell/editor/kernel/ConPTY budget 12000 chars, browser 6000), plus `strip_ansi(text)`, `IMAGE_MEDIA_TYPES` and `image_result(...)`. `strip_ansi` is shared by the two tools whose output arrives as terminal bytes — the IPython kernel's coloured tracebacks and `interactive_run`'s ConPTY transcript — and is deliberately wider than a colour-code pattern, since a console transcript also carries cursor positioning, erase-in-line, private-mode toggles and OSC title sets. The latter builds the `{"__kind__": "image", ...}` marker that a tool returns instead of a string when its result is pixels (file-editor/memory `view` on an image, every computer screenshot); `Chat._local_result_to_content` turns it into a real `image` content block.
 

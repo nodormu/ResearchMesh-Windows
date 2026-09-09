@@ -39,7 +39,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**22 local tools**, plus whatever your MCP servers expose:
+**23 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -59,6 +59,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `vision_query` | Ask a question about an image via a vision-capable chat server you configure — self-hosted or a paid API both work. See `[vision]` in config.toml for worked examples |
 | `speak` | Speak text aloud through your own local Piper voice model, played back on your configured audio output. 100% local — no server, no cloud TTS. See `[speak]` in config.toml |
 | `listen` | Record from your microphone for a bounded window and transcribe it locally via faster-whisper. 100% local — no cloud STT. See `[listen]` in config.toml |
+| `midi1` | MIDI 1.0 device discovery and I/O via `mido`/`python-rtmidi` — list ports, open/close, send/poll channel and system messages, SysEx, and read/write `.mid`/`.syx` files |
 
 Claude chooses the tools and keeps working until it has an answer. On top of the tools
 themselves, the REPL has two voice-related commands of its own: `/voice on|off` toggles
@@ -402,7 +403,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            22 local tools           [mcp] in config.toml
+     mcp_server.py            23 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
@@ -702,6 +703,9 @@ core/
   files.py                       recoverable deletes
   text_embeddings.py             vector embeddings from a private HTTP server
   vision.py                      vision-capable image queries against a private HTTP server
+  speak.py                       local text-to-speech via Piper
+  listen.py                      local speech-to-text via faster-whisper
+  midi1.py                       MIDI 1.0 device I/O via mido/python-rtmidi
   output.py                      shared output trimming + image results
   cli.py                         prompt_toolkit REPL
 ```

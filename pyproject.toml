@@ -96,9 +96,9 @@ ignore = [
 [tool.mypy]
 # The optional tool backings (duckdb, playwright, pyautogui, jupyter_client,
 # pywinpty, ruamel, tomlkit, jsonpath_ng, send2trash, piper, faster_whisper,
-# sounddevice, soundfile) are imported lazily inside the tool that needs them,
-# so they are legitimately absent from a bare environment — CI installs only
-# the five module-level dependencies. Without
+# sounddevice, soundfile, mido) are imported lazily inside the tool that needs
+# them, so they are legitimately absent from a bare environment — CI installs
+# only the five module-level dependencies. Without
 # this, every one of those imports is an error about a package that is *meant*
 # to be missing. Genuinely wrong imports of installed packages still fail.
 ignore_missing_imports = true
