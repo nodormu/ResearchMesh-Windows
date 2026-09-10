@@ -186,6 +186,24 @@ the REPL instead of by Claude.
 - enable Python install manager (windowed) pywmanager.exe # ditto
 - enable Python install manager (windowed) pyw.exe # ditto
 
+**⚠️ Before you get to step 6's `pip install`, read this if you want `midi1` to work:**
+Python 3.14 (what you just installed) has no prebuilt PyPI wheel yet for `python-rtmidi`,
+the native package behind the `midi1` tool (via `mido[ports-rtmidi]` in requirements.txt).
+Wheels only go up to Python 3.12 as of writing. Without a C++ compiler on the box, pip's
+attempt to build it from source fails outright — and because `pip install -r requirements.txt`
+installs everything in one all-or-nothing batch, that one failure takes down the *entire*
+install, not just `midi1`. You'll see `speak`/`listen`/sound packages, `httpx`, etc. all
+silently fail to install too, with no obvious reason why, since they never even get a chance
+to run before pip bails out. Two ways to avoid this:
+- **Install the C++ build toolchain first** (see step 6 below for the exact commands), so
+  pip can compile `python-rtmidi` from source successfully, same as it does automatically on
+  Linux/Mac dev boxes that already have a compiler. This gets you a fully working install
+  including `midi1`.
+- **Or, if you don't care about MIDI**, comment out the `mido[ports-rtmidi]>=1.3` line in
+  `requirements.txt` before running `pip install`, then everything else installs cleanly and
+  `midi1` just self-disables (same as any other tool with a missing package — it declares
+  itself normally and returns an install hint if you ever try to use it).
+
 ### 5) setup your Anthropic API key and the following for your windows environment (so you don't have to put the key in ReserachMesh itself)
 
 - If you use Claude Desktop/Claude Code (node cli) and have a subscription, you will also want an alias so it doesn't use your API key
@@ -284,6 +302,26 @@ OR if you prefer the alternative post-git module
 - type: `git clone -h` # to see all the git clone options if you did a full install of git on your windows box, not covered in this repo
 - type: `git clone https://github.com/nodormu/ResearchMesh-Windows`
 - type: `cd ResearchMesh-Windows`
+- **If you want `midi1` (MIDI 1.0 device I/O) to actually work, install the C++ build
+  toolchain BEFORE running `pip install` below** — otherwise `python-rtmidi` (a native
+  dependency of `mido[ports-rtmidi]`) has no prebuilt wheel for Python 3.13/3.14 as of
+  writing, pip tries to compile it from source, that fails without a compiler, and because
+  `pip install -r requirements.txt` is all-or-nothing, **the entire install fails, not just
+  midi1** — you'll get none of the packages, including sound/`httpx`/everything else, with
+  no obvious reason why. (`meson`/`ninja`, the actual build tools `python-rtmidi` uses, get
+  pulled in automatically by pip during the build — you do NOT need to install those two
+  yourself. The compiler and Windows SDK are the only pieces pip can't supply on its own.)
+  ```powershell
+  winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget
+  ```
+  Then, in the Visual Studio Installer that pops up (it launches automatically after the
+  winget install finishes), check the **"Desktop development with C++"** workload — that
+  single checkbox pulls in both the MSVC compiler and the Windows SDK, which is everything
+  `python-rtmidi`'s source build needs. This is a several-GB download; it's the standard
+  "how do I get a Windows C/C++ compiler" answer, not something specific to this project.
+  If you don't care about `midi1`/MIDI at all, skip this and just comment out the
+  `mido[ports-rtmidi]>=1.3` line in `requirements.txt` before the next step instead —
+  everything else installs fine either way.
 - type: `pip install -r requirements` # hopefully you don't get any errors, conflicts or wheel issues, if so then just chatgpt/claude/glm that issue for a fix, 
 	just be careful about it leading you down rabbit holes of "you must have done this", or "or lets check for sure" etc etc etc and try again.
 	AIs will feed you BS. Be VERY specific with memories and context before ANY prompt/request.
