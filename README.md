@@ -314,13 +314,47 @@ OR if you prefer the alternative post-git module
   ```powershell
   winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget
   ```
-  Then, in the Visual Studio Installer that pops up (it launches automatically after the
-  winget install finishes), check the **"Desktop development with C++"** workload — that
-  single checkbox pulls in both the MSVC compiler and the Windows SDK, which is everything
-  `python-rtmidi`'s source build needs. This is roughly a 4-6 GB download, not the full
-  Visual Studio IDE (that's 20-50+ GB) — Build Tools has no editor, no debugger UI, nothing
-  but the compiler/linker/SDK, so this is a much smaller install than "Visual Studio" the
-  product usually implies.
+  **Do not stop here and wait for a workload-picker window — none appears.** winget runs
+  this installer in `--passive` mode, which shows only a progress bar and then exits,
+  leaving Build Tools installed with the compiler/SDK workload *not* selected. (Confirmed:
+  the bootstrapper log's own recorded command line is
+  `... /finalizeInstall install --in ... --passive --campaign winget ...` — passive mode has
+  no workload-selection UI at all, by design.) If you already ran the command above and
+  `pip install` fails with the meson/`cl.exe` error below, you already have this bare
+  install and need the follow-up command, not a repeat of this one.
+
+  Once Build Tools is installed (bare, from the command above), add the actual C++
+  workload — the MSVC compiler + Windows SDK — with this single line, pasted into a
+  **plain, non-elevated** PowerShell window (elevation is *not* required — `-Verb RunAs`
+  below handles it, and it elevates silently with no UAC prompt on a default admin
+  account):
+
+  ```powershell
+  Start-Process -FilePath "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" -ArgumentList 'modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart' -Verb RunAs -Wait
+  ```
+
+  This is roughly a 4-6 GB download, not the full Visual Studio IDE (that's 20-50+ GB) —
+  Build Tools has no editor, no debugger UI, nothing but the compiler/linker/SDK. The
+  window shows no output while it runs (a few minutes); it simply returns you to the
+  prompt when done. Two things about this exact command matter and are easy to break if
+  you retype it instead of pasting it as-is:
+  - The `-ArgumentList` value must be **one single quoted string**, not a comma-separated
+    list of separate arguments. Passing it as an array causes Windows to lose the quotes
+    around the spaced `installPath` value during the elevated relaunch, truncating it to
+    `C:\Program` and making the installer report "An installed product matching the
+    following parameters cannot be found."
+  - Do **not** add `--wait` inside that argument string — it's not a valid option for
+    `setup.exe` and the installer rejects it outright ("Option 'wait' is unknown."). The
+    `-Wait` that matters is the *PowerShell* `Start-Process` switch at the end of the
+    line, which already blocks until the installer exits.
+
+  Verify it worked (no elevation needed for this check):
+  ```powershell
+  & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+  ```
+  If that prints your Build Tools install path, the compiler is in and `pip install` will
+  find it. If it prints nothing, the workload didn't get added — recheck the command above.
+
   - **If `pip install` still can't find the compiler afterward** (an error mentioning
     `cl.exe`, or "Microsoft Visual C++ 14.0 or greater is required", or similar): a plain
     PowerShell window doesn't automatically know where the compiler lives after a Build
@@ -372,21 +406,78 @@ Need to test you MCP servers that are connected to ResearchMesh? (requires node)
 `python mcp_client` and of course `python mcp_client --help` for help file
 
 Here are some tests you can try at the CLI assistant once you throw 20 bucks at Anthropic API to test with.
-a) Export the first certificate found in certmgr.exe with powershell and put it on my desktop
-b) Open Edge and look up the latest news headlines for the United States.
-c) Go to news.ycominator.com via DOM based surfing, open the top #1 article, and summarize it.
-NOTE:  This is an example of AI surfing the net without loading a visible browser or controlling your GUI.
-d) Open the link for the article you just summarized so I can see it in my default browser.
-e) Open Notepad and type, "Hello, I am controlling your mouse and keyboard.", save it to desktop, then export as PDF, also saved to the desktop.
-TIP:  Don't use the mouse and keyboard while its trying to, as this just makes it difficult for the AI.
-f) Give me a Cisco IOS 17.15 config for a 9200 24-port switch. Set VTP to client so my VLAN
-database isn't overwritten on the network its connecting to with two uplinks active/standby at 1 Gbps, 
-all 24 ports up and ready for voice + data VLANs to be pushed from the VLAN server with the uplink trunk 
-on VLAN 100. Note what I need to change for my environment, then write it to my Desktop in a plain text file.
+Each of these is meant to be copy/pasted as-is directly into the CLI assistant.
+
+a) **Build your own persistent memory of this machine — do this one first, always.**
+```
+Before we do anything else, I want you to build yourself some persistent memory about
+this machine, since /memories is the only state that survives a session reset or a
+restart — everything else (the Python kernel, the browser page, the DuckDB connection)
+resets every time. Scan this Windows machine's real hardware (CPU, RAM, GPU, disks, OS
+version) and what's actually installed (CLI tools on PATH via Get-Command, plus
+installed programs from the registry), then write two files: 01_system_info.md
+(hardware specs, OS version, and any Windows-specific quirks or behaviors you run into
+along the way) and 02_system_tool_reference.md (a categorized inventory of what's
+already installed, so you reach for a real local tool instead of writing something from
+scratch every time). In both files, add a short instruction near the top telling your
+future self to re-scan and refresh the file's contents the next time you're asked to
+read them, rather than trusting old data blindly — so this stays accurate as things
+change on this machine over time.
+```
+NOTE: this is the single most useful prompt on this list. Do it once, and every future
+session starts already knowing your machine instead of re-discovering it from scratch.
+
+b) **Understand why any of this is worth doing.**
+```
+Now that you've looked at what's installed on my machine, explain in plain terms why
+it's worth installing extra local command-line tools — like ripgrep, fd, jq, ffmpeg,
+ImageMagick — instead of just having you write a one-off script from scratch every
+time I ask for something similar. What's actually being saved by doing this?
+```
+
+c) **Install the recommended tools, one at a time.**
+```
+Look at the "Recommended local tools" section further down in this project's
+README.md, and install every tool listed there via winget — one at a time. Wait for
+each install to fully finish and tell me whether it succeeded or failed before
+starting the next one. Don't batch them together.
+```
+
+d) **Mouse/keyboard GUI control.**
+```
+Open Notepad, type "Hello, I am controlling your mouse and keyboard," save it to my
+Desktop, then export that same file as a PDF, also saved to my Desktop.
+```
+TIP: don't touch your own mouse and keyboard while it's doing this — fighting it for
+control just makes it harder for the AI.
+
+e) **Headless, DOM-based web browsing.**
+```
+Go to news.ycombinator.com using DOM-based browsing — not a visible browser window —
+open the #1 story on the front page, and give me a short summary of it.
+```
+NOTE: this is an example of it reading and surfing the web without ever opening a
+visible browser window or touching your mouse/keyboard.
+
+f) **Write a document, then convert it.**
+```
+Write a short one-page markdown file about the history of the QWERTY keyboard layout,
+then convert it to a PDF and save both the markdown and the PDF to my Desktop.
+```
+
+g) What is the airspeed velocity of an unladen swallow?
 
 ### 9) Important:
 
 If it can't do something controlling your mouse and keyboard, it can probably do it with powershell if your user in powershell can do it. UAC may cause you headache getting this to function, so if you have UAC on, it's not much help for you as a project to use a duplicate you. Also, Windows UIPI wil invisibly block synthetic input from a Medium-integrity source into a High-integrity window.
+
+One more thing: some installs (see "Recommended local tools" above) update the Windows PATH, but an
+already-running ResearchMesh process won't see that update until it's restarted — if a newly-installed
+tool doesn't seem to work right after installing it, close and reopen the app before assuming something's
+wrong. And always make prompt (a) above your literal first message in a new session — reading
+`01_system_info.md` and `02_system_tool_reference.md` first is what lets it actually know your machine
+instead of guessing, and (per that prompt's own instructions) triggers it to re-verify and refresh
+whatever's changed since the last time it looked.
 
 ## Configuration
 
@@ -819,6 +910,126 @@ overrides it. And a `command = ["node", …]` entry in `config.toml` runs whatev
 *you* point it at; that one is your dependency, not this project's.
 
 </details>
+
+## Recommended local tools (optional — saves tokens)
+
+None of these are dependencies — nothing here breaks without them. They're suggested
+purely so Claude reaches for a fast, purpose-built local binary via `powershell` instead
+of burning tokens re-implementing the same job in `python`, or reading whole files through
+the file editor just to search them. Install whichever are useful to you; skip the rest.
+
+```powershell
+# --- Search, text & structured data -----------------------------------------------
+winget install BurntSushi.ripgrep.MSVC      # rg — recursive search, instead of reading whole files to grep them
+winget install sharkdp.fd                   # fd — fast, .gitignore-aware find
+winget install sharkdp.bat                  # bat — cat with syntax highlighting + line numbers
+winget install jqlang.jq                    # jq — query/reshape JSON from the shell
+winget install MikeFarah.yq                 # yq — jq, but for YAML (and XML/CSV too)
+winget install Miller.Miller                # mlr — CSV/TSV/JSON reshape/filter/stats from the shell
+winget install junegunn.fzf                 # fzf — fuzzy finder; use `--filter` for non-interactive/scripted matching
+
+# --- File search & disk usage ------------------------------------------------------
+winget install voidtools.Everything          # background-indexed instant file search across the whole drive
+winget install voidtools.Everything.Cli      # es.exe — command-line query client for Everything, above
+winget install bootandy.dust                 # dust — fast, visual `du` — see what's actually eating disk space
+winget install muesli.duf                    # duf — nicer `df`, disk-space-by-volume at a glance (pairs with dust)
+# `tree` (directory-structure dumps) needs no install at all — already ships with Windows
+# at C:\Windows\System32\tree.com.
+
+# --- Archives & binary inspection ---------------------------------------------------
+winget install 7zip.7zip                     # 7z — archive creation/extraction for basically every format
+winget install sharkdp.hexyl                 # hexyl — colorized hex+ASCII dump, e.g. for raw SysEx/firmware bytes
+# MarcoPontello.TrID's winget manifest has the same stale-hash problem as Sysinternals
+# above ("Installer hash does not match" against mark0.net's own "latest" zip URL).
+# TrID also ships as a plain ZIP of portable exes, so the same direct-download fix works:
+Invoke-WebRequest -Uri "https://www.mark0.net/download/trid_win64.zip" -OutFile "$env:TEMP\trid_win64.zip"
+Expand-Archive -Path "$env:TEMP\trid_win64.zip" -DestinationPath "C:\Tools\TrID" -Force
+
+# --- Git / GitHub / diffing ---------------------------------------------------------
+winget install GitHub.cli                    # gh — GitHub API from the shell instead of scraping pages in a browser
+winget install dandavison.delta              # delta — syntax-highlighted, side-by-side git diff pager
+
+# --- HTTP / API testing --------------------------------------------------------------
+winget install HTTPie.HTTPie                 # http — much more readable than raw curl for poking at APIs
+
+# --- C / C++ / Rust toolchains --------------------------------------------------------
+# MSVC (cl.exe) usually already exists via VS Build Tools but needs vcvarsall.bat/Developer
+# PowerShell to activate. These work from a plain PowerShell call with no environment-
+# activation step, which is friendlier for one-off agent runs.
+winget install LLVM.LLVM                     # clang — self-contained C/C++ compiler, no env setup needed
+winget install Kitware.CMake                 # cmake — build system generator
+winget install Ninja-build.Ninja             # ninja — fast build backend, pairs with cmake
+winget install Rustlang.Rustup                # rustup — official Rust toolchain installer, bootstrapper only
+rustup-init.exe -y                            # actually installs rustc/cargo — winget alone does NOT do this
+# Optional, heavier: a full GNU/Linux-style toolchain (real gcc/make/pacman) instead of clang/MSVC.
+winget install MSYS2.MSYS2                   # base environment only — see MSYS2 setup steps below
+
+# --- System diagnostics ---------------------------------------------------------------
+# Microsoft.Sysinternals.Suite's winget manifest currently points at a hash that no longer
+# matches the file at Microsoft's own "always latest" download URL, so `winget install`
+# fails with "Installer hash does not match" — a stale-manifest problem, not a bad download.
+# Rather than suggesting --ignore-security-hash, grab it directly from the same official
+# URL winget itself uses (Sysinternals ships as a plain ZIP, no installer, so this is just
+# as legitimate as letting winget do it):
+Invoke-WebRequest -Uri "https://download.sysinternals.com/files/SysinternalsSuite.zip" -OutFile "$env:TEMP\SysinternalsSuite.zip"
+Expand-Archive -Path "$env:TEMP\SysinternalsSuite.zip" -DestinationPath "C:\Tools\Sysinternals" -Force
+
+# --- Audio production & media metadata ------------------------------------------------
+winget install Gyan.FFmpeg                   # ffmpeg/ffprobe — audio/video transcoding and inspection
+winget install ChrisBagwell.SoX              # sox — CLI audio conversion/trim/resample, complements ffmpeg
+winget install MediaArea.MediaInfo           # mediainfo (CLI) — instant codec/bitrate/duration metadata
+winget install OliverBetz.ExifTool           # exiftool — metadata on images/audio/PDFs/almost anything
+
+# --- Images & graphic design -----------------------------------------------------------
+winget install ImageMagick.ImageMagick.Q16   # convert/mogrify/compare — image conversion & editing from the shell
+winget install KDE.Krita                     # Krita — digital painting/illustration, distinct from GIMP (raster) and Inkscape (vector)
+winget install Google.Libwebp                # cwebp/dwebp — encode/decode the WebP image format from the shell
+
+# --- Video editing -----------------------------------------------------------------------
+winget install HandBrake.HandBrake.CLI       # HandBrakeCLI — video transcoding with sane presets, complements ffmpeg
+winget install Meltytech.Shotcut             # Shotcut — free timeline-based video editor (VLC here is playback-only)
+# DaVinci Resolve (the other obvious free NLE) has no official winget package — Blackmagic
+# only distributes it via a manual download + free account signup from their own site.
+
+# --- Documents & writing -----------------------------------------------------------------
+winget install oschwartz10612.Poppler        # pdftotext/pdftoppm — pull just the pages you need out of a PDF as text
+winget install calibre.calibre               # ebook-convert (CLI) — epub/mobi/azw3/etc., more formats than document_convert reaches
+winget install FSFhu.Hunspell                # hunspell — command-line spell-checking
+```
+
+### MSYS2 setup (`winget install MSYS2.MSYS2` only gets you the base — gcc/make need this too)
+
+Installs to `C:\msys64` by default. Don't try to paste/type into the MSYS2 terminal window — drive it
+straight from PowerShell instead, using bash.exe's `-lc` flag. Run these in order, as separate calls
+(the first one restarts itself partway through — that's expected, not a failure):
+
+```powershell
+# 1) Update the base system (run twice — first pass upgrades msys2-runtime and force-closes itself,
+#    second pass finishes the rest of the packages)
+& "C:\msys64\usr\bin\bash.exe" -lc "pacman -Syu --noconfirm"
+& "C:\msys64\usr\bin\bash.exe" -lc "pacman -Syu --noconfirm"
+
+# 2) Install the actual compiler + build tool (UCRT64 = the modern, recommended runtime)
+& "C:\msys64\usr\bin\bash.exe" -lc "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make"
+
+# 3) Verify
+& "C:\msys64\usr\bin\bash.exe" -lc "/ucrt64/bin/gcc.exe --version && /ucrt64/bin/mingw32-make.exe --version"
+
+# 4) (optional) put gcc/make on PATH for your user account, no admin needed — new PowerShell window
+#    required afterward for it to take effect
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\msys64\ucrt64\bin", [System.EnvironmentVariableTarget]::User)
+```
+
+Binaries end up at `C:\msys64\ucrt64\bin\gcc.exe` / `mingw32-make.exe` — not on `PATH` until step 4.
+
+7-Zip's `PATH` may still need fixing even after installing it (both winget and manual installs commonly
+leave it off `PATH`). To fix that for your user account only (no admin needed):
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\7-Zip", [System.EnvironmentVariableTarget]::User)
+```
+
+Open a new PowerShell window afterwards for the `PATH` change to take effect.
 
 ## License
 
