@@ -317,10 +317,24 @@ OR if you prefer the alternative post-git module
   Then, in the Visual Studio Installer that pops up (it launches automatically after the
   winget install finishes), check the **"Desktop development with C++"** workload — that
   single checkbox pulls in both the MSVC compiler and the Windows SDK, which is everything
-  `python-rtmidi`'s source build needs. This is a several-GB download; it's the standard
-  "how do I get a Windows C/C++ compiler" answer, not something specific to this project.
-  If you don't care about `midi1`/MIDI at all, skip this and just comment out the
-  `mido[ports-rtmidi]>=1.3` line in `requirements.txt` before the next step instead —
+  `python-rtmidi`'s source build needs. This is roughly a 4-6 GB download, not the full
+  Visual Studio IDE (that's 20-50+ GB) — Build Tools has no editor, no debugger UI, nothing
+  but the compiler/linker/SDK, so this is a much smaller install than "Visual Studio" the
+  product usually implies.
+  - **If `pip install` still can't find the compiler afterward** (an error mentioning
+    `cl.exe`, or "Microsoft Visual C++ 14.0 or greater is required", or similar): a plain
+    PowerShell window doesn't automatically know where the compiler lives after a Build
+    Tools install — its `PATH`/`INCLUDE`/`LIB` environment variables only get set up in a
+    special shell the installer creates for this purpose. Look in your Start Menu for
+    **"x64 Native Tools Command Prompt for VS 2022"** (installed alongside Build Tools),
+    open that instead of a regular PowerShell, `cd` back into `ResearchMesh-Windows`,
+    re-activate your `pvenv` (`pvenv\Scripts\Activate.ps1` — .ps1 scripts also work from
+    that prompt), and re-run `pip install -r requirements`. This isn't guaranteed to be
+    needed — `meson` (the actual build backend here) usually finds MSVC on its own via the
+    Windows registry even from a plain PowerShell — but if it doesn't, this is the explicit
+    next step rather than a dead end.
+  If you don't care about `midi1`/MIDI at all, skip all of the above and just comment out
+  the `mido[ports-rtmidi]>=1.3` line in `requirements.txt` before the next step instead —
   everything else installs fine either way.
 - type: `pip install -r requirements` # hopefully you don't get any errors, conflicts or wheel issues, if so then just chatgpt/claude/glm that issue for a fix, 
 	just be careful about it leading you down rabbit holes of "you must have done this", or "or lets check for sure" etc etc etc and try again.
