@@ -1,4 +1,4 @@
-"""Fast sanity checks — no API key, no network, no optional packages needed.
+"""Fast sanity checks — no API key, no network, no per-tool backing packages needed.
 
     python smoke_test.py
 
@@ -22,9 +22,11 @@ exits at import and the check could only ever say "Connection closed". The
 other three do not depend on the platform, so this script stays useful
 wherever it is run.
 
-Only module-level dependencies are required (anthropic, mcp, prompt_toolkit,
-pydantic, anyio); every optional backing is imported lazily inside the tool that
-needs it, so this runs on a bare CI box.
+Only pyproject.toml's five module-level dependencies are required (anthropic,
+mcp, prompt_toolkit, pydantic, anyio); every per-tool backing package is
+imported lazily inside the tool that needs it (they're still all installed by
+requirements.txt in a real setup — this script just doesn't need them to pass),
+so this runs on a bare CI box.
 """
 
 import asyncio

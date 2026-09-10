@@ -56,11 +56,14 @@ jobs:
           cache: pip
 
       - name: Install module-level dependencies only
-        # Every optional backing (playwright, duckdb, pyautogui, jupyter,
+        # Every per-tool backing package (playwright, duckdb, pyautogui, jupyter,
         # pywinpty, ruamel, tomlkit, jsonpath-ng, send2trash, pillow) is
         # imported *inside* the tool that needs it, so none of them are
-        # required to import the app or start the MCP server. Installing just
-        # these keeps CI to seconds and avoids pulling a browser binary.
+        # required to import the app or start the MCP server. CI installs just
+        # these five to keep the run to seconds and avoid pulling a browser
+        # binary — a real setup still uses `pip install -r requirements.txt`,
+        # which installs every one of those per-tool packages unconditionally
+        # too, nothing here is meant to be skipped at real install time.
         #
         # Keep mcp's bounds in step with requirements.txt, which explains them.
         # A runner installs fresh every time, so an unbounded range is how CI

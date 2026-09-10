@@ -94,11 +94,13 @@ ignore = [
 # this is a floor, not a straitjacket. Annotating a function opts it in, which
 # is the right direction of travel for new code.
 [tool.mypy]
-# The optional tool backings (duckdb, playwright, pyautogui, jupyter_client,
+# The per-tool backing packages (duckdb, playwright, pyautogui, jupyter_client,
 # pywinpty, ruamel, tomlkit, jsonpath_ng, send2trash, piper, faster_whisper,
 # sounddevice, soundfile, mido) are imported lazily inside the tool that needs
-# them, so they are legitimately absent from a bare environment — CI installs
-# only the five module-level dependencies. Without
+# them, so they are legitimately absent from a `pip install .`-only environment
+# (they ARE all present via `pip install -r requirements.txt`, which is what a
+# real install uses) — CI installs only the five module-level dependencies
+# listed above, on purpose, to keep the run fast. Without
 # this, every one of those imports is an error about a package that is *meant*
 # to be missing. Genuinely wrong imports of installed packages still fail.
 ignore_missing_imports = true

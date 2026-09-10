@@ -94,14 +94,16 @@ the REPL instead of by Claude.
 - **`computer` is primary-monitor only** and assumes the client is DPI-aware, which it sets
   at startup. A second monitor is not captured.
 - If Sonnet gets inconsistent on a complicated multi-tool request, set `model` to an Opus one.
-- Optional packages are imported only when a tool is used, so a missing one breaks just that
-  tool and tells you what to install.
+- Every per-tool package is installed unconditionally by `requirements.txt` — none of them are
+  meant to be skipped. They're just *imported* lazily, only when that tool is used, so if one
+  is ever missing anyway (e.g. a stale venv), it breaks just that tool and tells you what to
+  install rather than crashing the whole client.
 - If a tool reports a missing package that `requirements.txt` already lists (e.g.
   `sql_query`'s `duckdb`, or `config_edit`'s `ruamel.yaml`/`jsonpath-ng`), that's not a docs
   gap — your venv just predates that line. Everything in `requirements.txt` is a `>=` floor
   rather than a pin (there's no lockfile), so a venv can satisfy it and still miss a package
   added later. Re-run `pip install -r requirements.txt`; you don't need to restart the app,
-  because each optional package is imported at the moment its tool is called.
+  because each package is imported at the moment its tool is called, not at startup.
 - **Linting: one linter is configured, `ruff`, and `ruff check .` should pass.**
   `pyproject.toml` has a `[tool.ruff.lint]` section. It adds no rules — it only switches
   three *off*, each with its reason written next to it, so a clean run is the expected
@@ -110,16 +112,17 @@ the REPL instead of by Claude.
   versions.) Ruff is **not** a dependency and nothing runs it for you — install it yourself
   if you want it. There's no `[tool.black]` and no `.pylintrc`.
 - **Type checking: `mypy .` should pass too.** `pyproject.toml` has a `[tool.mypy]` section
-  setting exactly one option (`ignore_missing_imports`, because the optional tool backings
-  are lazily imported and legitimately absent from a bare venv); strictness stays at mypy's
+  setting exactly one option (`ignore_missing_imports`, because the per-tool backing packages
+  are lazily imported and legitimately absent from a `pip install .`-only venv — they're all
+  present in a real `pip install -r requirements.txt` setup); strictness stays at mypy's
   defaults, so unannotated function bodies aren't checked. It's worth having here because
   mypy checks against the packages you actually have installed, which makes it the gate that
   catches a dependency changing shape under you — it named every mcp 1.x → 2.x rename in one
   run, including the ones in `core/tools.py` that the smoke test can't reach.
-- **`python smoke_test.py` before you commit.** Seconds, no API key, no network, no optional
-  packages. It checks that everything imports, that the tool registry is well-formed, that the
-  tool count in the docs still matches the code, and that `mcp_server.py` completes an MCP
-  handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
+- **`python smoke_test.py` before you commit.** Seconds, no API key, no network, no per-tool
+  backing packages needed. It checks that everything imports, that the tool registry is
+  well-formed, that the tool count in the docs still matches the code, and that `mcp_server.py`
+  completes an MCP handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
   (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
 - **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
   — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
@@ -598,7 +601,7 @@ it as `/memories`; every command is confined to that directory, so a traversal p
 `/memories/../../.ssh/id_rsa` is rejected rather than served. It's a private scratchpad for
 Claude, not a place for your project files — and it persists until you delete it.
 
-**Optional Python packages** (all in `requirements.txt`; each is imported lazily):
+**Per-tool Python packages** (all installed unconditionally via `requirements.txt`; each is only *imported* lazily, at the moment its tool runs):
 
 | Tool | Needs |
 |---|---|

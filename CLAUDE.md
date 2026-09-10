@@ -59,19 +59,19 @@ Pandoc's installer *does* extend PATH, but an already-running shell keeps its ol
 
 The `computer` tool needs no system packages: `pyautogui` and `pillow` are the whole dependency and screen capture works out of the box. The one thing to know about it is **UIPI**: a process at medium integrity cannot send input to a window owned by an elevated one, so if anything running as Administrator has focus, clicks and keystrokes are discarded and the screenshot afterwards looks exactly like a click that missed. It is not refused up front, because it depends on which window has focus at that instant rather than on the machine — see the `core/computer.py` bullet under Architecture.
 
-Optional tool dependencies are imported **lazily, inside the tool that needs them**, so a missing package only breaks that one tool — it still gets declared to Claude and returns an install hint if used. To drop a tool entirely, remove its module from `MODULES` in `core/local_tools.py`.
+Per-tool dependencies are imported **lazily, inside the tool that needs them**, rather than being optional to install — `requirements.txt` installs every one of them unconditionally. The lazy import just means that if a package were ever missing anyway (e.g. a stale venv), only that one tool breaks — it still gets declared to Claude and returns an install hint if used, instead of crashing the whole client at startup. To drop a tool entirely, remove its module from `MODULES` in `core/local_tools.py`.
 
 If a tool's install hint names a package that `requirements.txt` already lists (e.g.
 `sql_query`'s `duckdb`, or `config_edit`'s `ruamel.yaml`/`jsonpath-ng`), the docs aren't
 incomplete — the active venv predates that line. There is no lockfile here: every entry in
 `requirements.txt` is a `>=` floor rather than a pin, so a venv can still satisfy the file as
 it stood when it was built and lack a package added to it since. Re-running
-`pip install -r requirements.txt` fixes it **without restarting the app** — every optional
-backing is imported inside the function that needs it, and a failed import leaves no cached
+`pip install -r requirements.txt` fixes it **without restarting the app** — every backing
+package is imported inside the function that needs it, and a failed import leaves no cached
 sentinel behind (`core/data.py` assigns `_connection` only on success), so the next tool call
 simply retries the import.
 
-See **`README.md`** for the full environment setup — step-by-step install is its own "Setup (Windows)" section, and the collapsed "Full setup detail" appendix covers the browser download, the optional per-tool packages, and environment variables. (`SETUP.md` was merged into it; the two duplicated ~60% of their content and drifted apart.)
+See **`README.md`** for the full environment setup — step-by-step install is its own "Setup (Windows)" section, and the collapsed "Full setup detail" appendix covers the browser download, the per-tool backing packages, and environment variables. (`SETUP.md` was merged into it; the two duplicated ~60% of their content and drifted apart.)
 
 **One linter is configured: `ruff`.** `pyproject.toml` has a `[tool.ruff.lint]` section, so
 **`ruff check .` should come back clean** — treat that as the bar for an edit. It adds no
@@ -90,9 +90,10 @@ is well-formed with no duplicate names, **the tool count claimed in the docs sti
 `delegate`. That third check exists because this repo states its tool count in five places
 across two files; the fourth because a stray byte on stdout desynchronising JSON-RPC is
 invisible until a client connects. It needs no API key (a placeholder satisfies
-`_require_api_key`, and listing tools never reaches the API) and no optional packages, since
-every optional backing is imported lazily — which is why CI installs only the five
-module-level dependencies and finishes in seconds.
+`_require_api_key`, and listing tools never reaches the API) and none of the per-tool backing
+packages, since every one of them is imported lazily — which is why CI installs only
+pyproject.toml's five module-level dependencies (not the full requirements.txt) and still
+finishes in seconds.
 
 **The handshake check is Windows-only and reports a `skip` elsewhere.** `mcp_server.py`'s
 stdout guard imports `msvcrt` and calls `SetStdHandle` unconditionally, so off Windows the
@@ -111,8 +112,10 @@ inside a double-quoted string; both have already broken a `run:` block here.
 
 **`mypy .` is the third gate**, configured in `pyproject.toml`'s `[tool.mypy]` and run by CI
 alongside `ruff`. It should come back clean. Only one option is set —
-`ignore_missing_imports`, because the optional tool backings are lazily imported and
-legitimately absent from a bare environment, and **`platform = "win32"`**, so it checks the
+`ignore_missing_imports`, because the per-tool backing packages are lazily imported and
+legitimately absent from a `pip install .`-only environment (they're all present via
+`pip install -r requirements.txt`, a real setup's actual install path), and
+**`platform = "win32"`**, so it checks the
 platform that ships rather than the one it happens to run on. That second option is what lets
 `core/computer.py`'s `ctypes.windll` calls type-check wherever the gate is run, and code that
 is wrong *on Windows* is reported even where it would otherwise pass.
@@ -388,7 +391,7 @@ doesn't have. Touch them all:
 3. `requirements.txt` and `pyproject.toml`, if it has a third-party dependency.
 4. `SYSTEM_PROMPT` in `core/chat.py` — both the explicit roster **and** any tool-choice
    guidance, which is the half no automation can generate.
-5. `README.md` — the tool table, the optional-package table, the project layout, and the
+5. `README.md` — the tool table, the per-tool package table, the project layout, and the
    tool count (stated more than once).
 6. `CLAUDE.md` — the module bullet in Architecture, the count in Overview, and the count in
    Key conventions.
