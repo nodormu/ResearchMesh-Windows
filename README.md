@@ -445,9 +445,9 @@ this machine, since /memories is the only state that survives a session reset or
 restart — everything else (the Python kernel, the browser page, the DuckDB connection)
 resets every time. Scan this Windows machine's real hardware (CPU, RAM, GPU, disks, OS
 version) and what's actually installed (CLI tools on PATH via Get-Command, plus
-installed programs from the registry), then write two files: 01_system_info.md
+installed programs from the registry), then write two files: 01_environment_notes.md
 (hardware specs, OS version, and any Windows-specific quirks or behaviors you run into
-along the way) and 02_system_tool_reference.md (a categorized inventory of what's
+along the way) and 01_system_tool_inventory.md (a categorized inventory of what's
 already installed, so you reach for a real local tool instead of writing something from
 scratch every time). In both files, add a short instruction near the top telling your
 future self to re-scan and refresh the file's contents the next time you're asked to
@@ -505,7 +505,7 @@ One more thing: some installs (see "Recommended local tools" above) update the W
 already-running ResearchMesh process won't see that update until it's restarted — if a newly-installed
 tool doesn't seem to work right after installing it, close and reopen the app before assuming something's
 wrong. And always make prompt (a) above your literal first message in a new session — reading
-`01_system_info.md` and `02_system_tool_reference.md` first is what lets it actually know your machine
+`01_environment_notes.md` and `01_system_tool_inventory.md` first is what lets it actually know your machine
 instead of guessing, and (per that prompt's own instructions) triggers it to re-verify and refresh
 whatever's changed since the last time it looked.
 
