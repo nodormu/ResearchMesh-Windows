@@ -112,17 +112,31 @@ def check_tool_registry() -> None:
 
 
 def check_docs_match_code() -> None:
-    """The count is stated in prose in several places and drifts silently."""
+    """The count is stated in prose in several places and drifts silently.
+
+    Three phrasings are checked, all confirmed in actual use across this
+    project's own forks: "N local tools" (the canonical form), "N local +
+    whatever the connected MCP servers advertise" (the Key Conventions
+    tool-selection bullet), and "tool, not N" (the mcp_server.py Architecture
+    bullet explaining it exposes one tool, not the whole local set). A bare
+    "N tools" pattern was tried and rejected — it false-matched an unrelated
+    "30-50 tools" threshold and a "2006 tool" aside in an unrelated package
+    explanation, both real strings already in this file.
+    """
     print("docs vs code")
     from core import local_tools
 
     actual = len(local_tools.TOOLS)
-    pattern = re.compile(r"(\d+) local tools")
+    pattern = re.compile(
+        r"(\d+) local tools?"
+        r"|(\d+) local \+"
+        r"|tools?,? not (\d+)\b"
+    )
     for doc in ("README.md", "CLAUDE.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")
-        claimed = {int(m) for m in pattern.findall(text)}
+        claimed = {int(g) for m in pattern.finditer(text) for g in m.groups() if g}
         if not claimed:
-            check(f"{doc}: states a tool count", False, "no '<n> local tools' found")
+            check(f"{doc}: states a tool count", False, "no tool-count phrasing found")
             continue
         check(
             f"{doc}: claims {sorted(claimed)} == actual {actual}",
