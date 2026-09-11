@@ -39,10 +39,17 @@ python mcp_client.py            # add --help for the inspector's other modes
 
 Connect additional stdio MCP servers by passing their scripts as argv: `python main.py path\to\other_server.py`.
 
-**Full install walkthrough lives in `README.md`'s "Setup (Windows)" section** —
-including Playwright, LibreOffice/Pandoc via winget, and the complete MSVC Build
-Tools two-step (the exact `winget`/`Start-Process` commands, their quoting gotchas,
-and the `vswhere` verification step). Don't re-derive that walkthrough here.
+```powershell
+pip install -r requirements.txt
+playwright install chromium   # pip installs the package, not the browser itself
+```
+
+**Full install walkthrough (LibreOffice/Pandoc via winget, and the complete MSVC
+Build Tools two-step — the exact `winget`/`Start-Process` commands, their quoting
+gotchas, and the `vswhere` verification step) lives in `README.md`'s "Setup
+(Windows)" section.** Don't re-derive that walkthrough here — the two commands above
+are what get a working dev environment; MSVC/LibreOffice/Pandoc are one-time OS-level
+setup.
 
 One fact worth keeping in this file because it explains a failure mode that doesn't
 look like its own cause: **`python-rtmidi` (backing `midi1`) has no prebuilt wheel for
