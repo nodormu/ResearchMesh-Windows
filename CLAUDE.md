@@ -28,7 +28,7 @@ Requires environment variables, read from the process environment — the app do
 ```powershell
 setx ANTHROPIC_API_KEY "..."      # persists; new shells only
 $env:ANTHROPIC_API_KEY = "..."    # this session
-$env:N8N_MCP_TOKEN     = "..."    # one per server, named by its token_env in config.toml
+$env:YOUR_SERVER_MCP_TOKEN = "..."  # one per server, named by its token_env in config.toml
 ```
 
 Inspect the configured MCP servers (connects to each, lists what it exposes, reports failures, exits). This is the project's replacement for `npx @modelcontextprotocol/inspector` — see the `mcp_client.py` bullet under Architecture for why it is preferred rather than merely Node-free:
@@ -39,31 +39,21 @@ python mcp_client.py            # add --help for the inspector's other modes
 
 Connect additional stdio MCP servers by passing their scripts as argv: `python main.py path\to\other_server.py`.
 
-One-time setup for the browser tool (headless Chromium via Playwright — `pip` installs the package but not the browser binary), plus the two binaries `document_convert` shells out to:
+**Full install walkthrough lives in `README.md`'s "Setup (Windows)" section** —
+including Playwright, LibreOffice/Pandoc via winget, and the complete MSVC Build
+Tools two-step (the exact `winget`/`Start-Process` commands, their quoting gotchas,
+and the `vswhere` verification step). Don't re-derive that walkthrough here.
 
-```powershell
-pip install -r requirements.txt
-playwright install chromium
-winget install TheDocumentFoundation.LibreOffice   # document_convert
-winget install JohnMacFarlane.Pandoc              # document_convert: the markdown path
-```
-
-There is no `playwright install-deps` step: that installs shared libraries for other operating systems and does not apply here.
-
-**`python-rtmidi` (a native dependency of `mido[ports-rtmidi]`, which backs `midi1`) has no prebuilt wheel for Python 3.13/3.14 as of writing** — its PyPI wheels top out at cp312, on every OS, including Windows. Without a C++ compiler present, pip's fallback source build fails, and because `pip install -r requirements.txt` installs everything in one all-or-nothing batch, **that single failure takes the entire install down with it** — sound packages, `httpx`, everything, not just `midi1` — with no error that obviously points at `mido`/`rtmidi` as the cause. This bites hardest right now because the current Microsoft Store "Python Install Manager" defaults to installing Python 3.14 with zero extra steps, which is exactly the affected version.
-
-Fix, confirmed working end-to-end, is **two commands, not one** — a single `winget install` is not enough:
-
-1. `winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget` — installs the Build Tools bootstrapper only. **No workload-picker window appears after this**, despite what you might expect: winget runs it with `--passive`, which shows a bare progress bar and exits — the compiler/SDK workload is *not* selected by this step. (Verified from the bootstrapper's own log: `... /finalizeInstall install --in ... --passive --campaign winget ...`.)
-2. Add the actual **"Desktop development with C++"** workload with this one line, pasted as-is into a plain, non-elevated PowerShell (`-Verb RunAs` elevates it; on a default admin account with `ConsentPromptBehaviorAdmin=0` this is silent, no UAC prompt):
-   ```powershell
-   Start-Process -FilePath "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" -ArgumentList 'modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart' -Verb RunAs -Wait
-   ```
-   Two easy ways to break this if retyped instead of pasted verbatim: (a) `-ArgumentList` must be **one single quoted string**, not a comma-separated array — an array loses the quoting around the spaced `installPath` value across the elevated relaunch, truncating it to `C:\Program` and failing with "An installed product matching the following parameters cannot be found"; (b) do **not** add `--wait` inside that string — it isn't a valid `setup.exe` option ("Option 'wait' is unknown") and is redundant anyway, since the trailing PowerShell `-Wait` already blocks until the installer exits.
-
-Verify with (no elevation needed): `& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath` — prints the install path if the workload is present, nothing if it still isn't.
-
-Both commands together supply the MSVC compiler and Windows SDK, the only two pieces pip can't fetch on its own. `meson`/`ninja`, `python-rtmidi`'s actual build tools, are pulled in automatically as PEP 517 build requirements and need no manual install. If you don't need `midi1`, commenting out the `mido[ports-rtmidi]` line in `requirements.txt` sidesteps the whole problem — this is the one dependency in the file currently known to be capable of taking the rest down with it on a stock Windows 3.13+/3.14 setup. (Confirmed directly against PyPI's file listing and `python-rtmidi`'s own `pyproject.toml`, not assumed.) Note that Build Tools is a separate, ~4-6 GB, no-IDE standalone download — not the full 20-50+ GB Visual Studio product, which shares the same installer UI but is a different install target entirely. One more gotcha if `pip install` still can't find `cl.exe` afterward: a plain PowerShell doesn't inherit the compiler's `PATH`/`INCLUDE`/`LIB` vars by default — open **"x64 Native Tools Command Prompt for VS 2022"** from the Start Menu instead (installed alongside Build Tools), re-activate the venv there, and retry. `meson` usually locates MSVC on its own via the registry even from plain PowerShell, so this extra step is a fallback, not something everyone needs.
+One fact worth keeping in this file because it explains a failure mode that doesn't
+look like its own cause: **`python-rtmidi` (backing `midi1`) has no prebuilt wheel for
+Python 3.13/3.14 as of writing, on any OS.** Without the MSVC compiler present, pip's
+source-build fallback fails — and because `pip install -r requirements.txt` installs
+everything in one all-or-nothing batch, that single failure takes the *entire*
+install down with it (sound packages, `httpx`, everything), with no error that
+obviously points at `mido`/`rtmidi` as the cause. If `midi1` isn't needed, commenting
+out the `mido[ports-rtmidi]` line in `requirements.txt` sidesteps the whole problem —
+it's the one dependency currently known to be capable of taking the rest down with it
+on a stock Windows 3.13+/3.14 setup.
 
 Two things about those two binaries, both of which fail in ways that do not look like the cause:
 
@@ -102,8 +92,9 @@ tool's behaviour, because that would need LibreOffice, a browser, a real desktop
 credits. It checks the four things that break silently — everything imports, the tool registry
 is well-formed with no duplicate names, **the tool count claimed in the docs still equals
 `len(local_tools.TOOLS)`**, and `mcp_server.py` completes an MCP handshake advertising
-`delegate`. That third check exists because this repo states its tool count in five places
-across two files; the fourth because a stray byte on stdout desynchronising JSON-RPC is
+`delegate`. That third check exists because this repo states its tool count in enough
+places across both files (currently 4 and growing with every tool added) that
+hand-checking them drifts; the fourth because a stray byte on stdout desynchronising JSON-RPC is
 invisible until a client connects. It needs no API key (a placeholder satisfies
 `_require_api_key`, and listing tools never reaches the API) and none of the per-tool backing
 packages, since every one of them is imported lazily — which is why CI installs only
@@ -150,7 +141,9 @@ core.chat"`) are what `smoke_test.py` automates.
 
 Two rules about this codebase that a linter will fight you on, both learned the hard way:
 
-- **Blanket `except` is the architecture, not an oversight** (`BLE001`, ~32 sites). Every
+- **Blanket `except` is the architecture, not an oversight** (`BLE001`, 59 sites as of
+  this writing — re-run `ruff check . --select BLE001 --statistics` rather than
+  trusting this number, it grows with every new tool). Every
   local tool must catch anything and return an error string rather than crash the chat loop
   (see `core/chat.py`'s `_run_tool_uses` / `_resolve_pending_tool_uses`); the ones in
   `core/cli.py`, `core/tools.py`, `core/chat.py` and `main.py` are the equivalent guards for
@@ -302,14 +295,12 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   two-reason non-raising decline shape (`"disabled"` — `[speak].enabled` is false,
   checked before anything else touches the filesystem or an audio device; and
   `"not_configured"` — `voice_model` unset or its file, or its required
-  `<voice_model>.json` sidecar, doesn't exist). **A genuine platform divergence from the
-  Linux client, not just a transport swap**: Linux's `speak.py` shells out to two
-  subprocesses (`python3 -m piper`, then `paplay`) because Piper only exposes a CLI
-  entry point there; the `piper-tts` PyPI package also ships a real Python API
-  (`piper.PiperVoice`), so this port synthesizes IN-PROCESS
-  (`PiperVoice.load(...).synthesize_wav(...)`) and plays the result back with
-  `sounddevice`/`soundfile` instead — `paplay` and PipeWire/PulseAudio sink names have
-  no Windows equivalent. `sink`, if set, is a `sounddevice` output device index or a
+  `<voice_model>.json` sidecar, doesn't exist). Synthesizes **IN-PROCESS** via the
+  `piper-tts` PyPI package's real Python API
+  (`PiperVoice.load(...).synthesize_wav(...)`), then plays the result back with
+  `sounddevice`/`soundfile` — no subprocess needed for either step, since both
+  libraries expose everything as direct Python calls. `sink`, if set, is a
+  `sounddevice` output device index or a
   name substring (`python -m sounddevice` to list devices); optional, since Windows
   already has a working default output device with no configuration. Settings are
   re-read from `config.toml` on every call, no restart needed.
@@ -318,11 +309,8 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   in-process with `faster-whisper` (`WhisperModel(...).transcribe(...)`, CPU/CTranslate2
   — a library with no CLI entry point, so no second subprocess either way). Same
   `"disabled"`/`"not_configured"` status-field pattern as `speak.py` (`[listen].enabled`
-  checked before `device`). **Platform divergence**: Linux's `listen.py` shells out to
-  `timeout <N> parecord ...` against a named PipeWire source; Windows has neither
-  PipeWire nor `parecord`, so capture here goes through `sounddevice.rec(...)` entirely
-  in-process, with `soundfile` writing the temp WAV. `device` is consequently OPTIONAL
-  here (unlike the Linux version, where a PipeWire source name is mandatory) —
+  checked before `device`). Capture goes through `sounddevice.rec(...)` entirely
+  in-process, with `soundfile` writing the temp WAV. `device` is **OPTIONAL** —
   `sounddevice` already has a working default-input-device concept, so it "just works"
   against system default audio with `[listen]` left at defaults; set `device` (a numeric
   index or a name substring) only to pin a specific microphone. `model_size` (default
@@ -330,10 +318,9 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   30, a hard cap) all come from `[listen]`, re-read fresh per call.
 
 - **`core/midi1.py`** — `midi1`: MIDI 1.0 device discovery and I/O via
-  `mido[ports-rtmidi]` (python-rtmidi backend), ported byte-identical from the Linux
-  client — the only change is one illustrative comment, since `mido`/`python-rtmidi`
-  already speak the same cross-platform API over WinMM/WinRT here as they do over
-  ALSA/JACK on Linux, so no functional Windows branch was needed. `list_devices`/
+  `mido[ports-rtmidi]`, which speaks WinMM/WinRT on this platform through the same
+  cross-platform API `mido`/`python-rtmidi` exposes everywhere — no Windows-specific
+  branch was needed anywhere in this module. `list_devices`/
   `open`/`close`/`send`/`poll` cover named-port discovery and channel/System-Common/
   System-Real-Time messages plus generic SysEx; `poll` captures every incoming message
   via a custom callback registered at `open` time (not at poll-call time) into a
@@ -355,9 +342,9 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   `local_tools.shutdown()` so open ports are released on exit. `active_sensing` can be
   sent but never appears in `poll` results — mido's rtmidi backend hardcodes it out at
   the library level, not fixable without bypassing mido. A companion MIDI 2.0/UMP tool
-  was developed alongside this one on the Linux client but has since been removed from
-  that project and moved to its own standalone project — this port only carries MIDI 1.0
-  forward, matching the Linux client's own current scope.
+  was developed alongside this one but has since been removed and moved to its own
+  standalone project — this module only carries MIDI 1.0 forward, matching this
+  project's current scope (see Overview above).
 
 - **`core/output.py`** — `clip(text, limit)`, the one truncation helper the local tool modules share (shell/editor/kernel/ConPTY budget 12000 chars, browser 6000), plus `strip_ansi(text)`, `IMAGE_MEDIA_TYPES` and `image_result(...)`. `strip_ansi` is shared by the two tools whose output arrives as terminal bytes — the IPython kernel's coloured tracebacks and `interactive_run`'s ConPTY transcript — and is deliberately wider than a colour-code pattern, since a console transcript also carries cursor positioning, erase-in-line, private-mode toggles and OSC title sets. The latter builds the `{"__kind__": "image", ...}` marker that a tool returns instead of a string when its result is pixels (file-editor/memory `view` on an image, every computer screenshot); `Chat._local_result_to_content` turns it into a real `image` content block.
 
@@ -371,7 +358,7 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
 
   Its `main()` is **the inspector for this project**, and deliberately replaces `npx @modelcontextprotocol/inspector`: `--server`, `--schema`, `--prompts`, `--resources`, `--call TOOL --args JSON`, and `--url`/`--token-env` for an endpoint that is not in the config. The reason to prefer it is not that it avoids a Node install, though it does — it is that it builds every client through `main.build_client()` from the same `config.toml` the app reads, so it tests the configuration rather than whatever you retype into a browser. **An inspector that connects differently from the app can disagree with it, and this one already did**: before it reused `build_client`, it forced `transport="http"` on every entry, so a stdio entry failed on a missing URL and it reported `unreal` unreachable while `python main.py` was talking to it perfectly well. Keep it building clients through `main.py`. `--token-env` names the variable rather than taking the token, matching the contract everywhere else.
 
-- **`mcp_server.py`** — the opposite direction: serves this agent to an MCP client (Claude Code) as a **single `delegate(task, session, thinking)` tool**, so the app is a server and a client at once. Four things decide its shape. **One tool, not 20** — `memory_20250818` and `computer_20251124` are learned schemas, and `computer` needs the `computer-use-2025-11-24` header on the request that *declares* it; that header belongs to this app's own API call, so re-exporting those tools over MCP would strip the trained schema. Wrapping `Chat.run()` keeps them intact and keeps `SYSTEM_PROMPT` in force, which is why the shell/editor overlap with the caller's own tools is deliberate rather than redundant, and why the ~30-50 tool ceiling doesn't apply. **It `chdir`s to the repo root**, because a client spawns it with the client's project as cwd and `CLAUDE_MEMORY_DIR` defaults to a *relative* `memories`. **Calls are serialised behind an `asyncio.Lock`** — one mouse, one browser page, one kernel. One `Chat` is kept per `session` id, so the caller can follow up on a previous delegation; a new id starts clean.
+- **`mcp_server.py`** — the opposite direction: serves this agent to an MCP client (Claude Code) as a **single `delegate(task, session, thinking)` tool**, so the app is a server and a client at once. Four things decide its shape. **One tool, not 23** — `memory_20250818` and `computer_20251124` are learned schemas, and `computer` needs the `computer-use-2025-11-24` header on the request that *declares* it; that header belongs to this app's own API call, so re-exporting those tools over MCP would strip the trained schema. Wrapping `Chat.run()` keeps them intact and keeps `SYSTEM_PROMPT` in force, which is why the shell/editor overlap with the caller's own tools is deliberate rather than redundant, and why the ~30-50 tool ceiling doesn't apply. **It `chdir`s to the repo root**, because a client spawns it with the client's project as cwd and `CLAUDE_MEMORY_DIR` defaults to a *relative* `memories`. **Calls are serialised behind an `asyncio.Lock`** — one mouse, one browser page, one kernel. One `Chat` is kept per `session` id, so the caller can follow up on a previous delegation; a new id starts clean.
 
   **The stdout guard must run before any `core/` import**, and it is the hard part of this file — on stdio, fd 1 *is* the JSON-RPC channel, and the app `print()`s to stdout in ~22 places; it therefore `dup`s fd 1 for JSON-RPC and points fd 1 itself at stderr. **On Windows that is only half the job, and the missing half is silent.** Win32 keeps a standard-handle table separate from the C runtime's fd table, and `os.dup2` writes only to the latter — `GetStdHandle(STD_OUTPUT_HANDLE)` still returns the original pipe afterwards. Python's `subprocess` reads exactly that when a child does not redirect (`_get_handles` calls `GetStdHandle` rather than inheriting fd 1), so a child would write straight into the channel the guard believes it has taken away. The IPython kernel is the live case: `jupyter_client` launches it without capturing stdout, the same inheritance that puts ipykernel's startup warning in front of the user. Hence the `SetStdHandle` call alongside the `dup2`; a failure there warns rather than passing quietly, because the symptom — a client desyncing mid-session — points at nothing. The JSON-RPC writer also passes `newline=""`, since a `TextIOWrapper` at the default would translate every `\n` to `os.linesep` and CRLF-terminate every frame on a transport that delimits messages by newline.
 
@@ -387,7 +374,7 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
 - **"Learned" vs custom.** The distinction is whether Claude already knows the schema, *not* which file it lives in. `claude_learned_schemas.py` holds the small Anthropic-defined tools (text editor and the two server-side web tools); `memory.py` and `computer.py` are also Anthropic-defined but got their own modules because their implementations are substantial. None of them carry descriptions — Claude is already trained on those schemas, so writing one is at best redundant and at worst contradicts what it was trained on. Every other local module holds fully custom tools Claude learns at runtime from its descriptions, `powershell` now among them. Keep all of them separate from `tools.py`, which is strictly the MCP bridge.
 - **A learned tool is exempt from the "must beat the shell" test below** — the schema already exists in the model, so the only question is whether you want the capability, not whether it earns a slot on novelty. The converse is the lesson of this project: **a learned schema is only an asset while its dialect matches the machine.** `bash_20250124` was dropped for exactly that reason — the training that would have made it free is training to emit the wrong shell.
 - **A new local tool must beat `powershell` at something structural** — statefulness (`python`), interactivity (`interactive_run`), a correctness guarantee (`config_edit`), recoverability (`trash`), or context economy — since Claude can already shell out to any CLI. Wrapping a command PowerShell could run unaided just spends a tool slot.
-- **Tool-selection accuracy degrades past roughly 30–50 loaded tools.** 20 local + whatever the connected MCP servers advertise leaves headroom; prefer one tool with a mode parameter (as `document_convert` and `config_edit` do) over one tool per variation.
+- **Tool-selection accuracy degrades past roughly 30–50 loaded tools.** 23 local + whatever the connected MCP servers advertise leaves headroom; prefer one tool with a mode parameter (as `document_convert` and `config_edit` do) over one tool per variation.
 - **`web_search` (discovery) and the browser tool (navigate/interact) are complementary**, not redundant — don't reimplement search inside Playwright.
 - Add an MCP server by passing its script as argv (stdio) or adding another `MCPClient(...)` in `main.py` (e.g. `transport="http"` for another HTTP server). Its tools then appear to Claude automatically.
 - `powershell` is **stateless between calls** (fresh process each time — `cd` and `$env:` changes don't persist; chain with `;`); the `python` kernel, the browser page, and the DuckDB connection **are** stateful within a session.
