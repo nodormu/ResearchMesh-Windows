@@ -73,6 +73,36 @@ the REPL instead of by Claude.
 - **There is no approval prompt.** Claude runs the commands and file edits it decides on, as
   your user, with no y/n in between. Built for local development. `trash` exists so deletes
   are at least recoverable.
+- **This is meant to be an AI *employee*, not just an unsupervised agent.** The
+  OS-level restrictions below are the last line of defense, but the fuller model goes
+  further: give it its own email address, let it talk to humans and other AIs in
+  Teams or Slack like any other coworker, and route its actual work through the same
+  systems everyone else's work goes through — a CRM/CMDB (ServiceNow, ConnectWise,
+  whatever the organization already runs) as its system of record, change tickets
+  opened for anything that touches production. Those are examples, not a fixed list.
+  None of that is built into this app's 23 tools directly; it's what
+  [MCP, in both directions](#mcp-in-both-directions) is *for* — connect it to an
+  email MCP server, a Teams/Slack one, your CMDB's — and it participates the same way
+  a new hire would, through the same front doors, not a side channel. That reframes
+  what "no approval prompt" actually means: no y/n dialog *in this software*, not that
+  nothing ever gates a risky change — a maintenance request can be drafted and
+  submitted instantly, but whether it actually *runs* still depends on the same
+  Change Advisory Board approval a human's request would need, because that gate
+  lives in the change-management process, not in this client.
+- **Constrain what this account can actually do, at the OS level.** No approval
+  prompt means Claude can do anything your user account can — so scope that account
+  the way you'd scope a laptop issued to a new employee: enough access to do the job,
+  not more. This is enforced by the OS itself, independent of anything Claude decides
+  to do, so it holds even against a fully compromised or badly hallucinating agent.
+  - Run as a **standard (non-administrator) user account** — not one with local admin rights.
+  - **NTFS permissions** on files and folders scope what that account can read,
+    write, or execute.
+  - **Group Policy Objects (GPOs)** and Local Security Policy (User Rights
+    Assignment) are the standard way IT departments restrict what a managed account
+    can do system-wide — logon rights, writable drives, which apps can run — and
+    apply the same way to this one.
+  - **AppLocker** (or Windows Defender Application Control) restricts which
+    executables/scripts the account may run at all, if you want to go further.
 - It's your API key: one request can fan out into many tool calls (capped at 75 per turn).
 - `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
   Chain with `;` in one call, or use `python`, which keeps state.
