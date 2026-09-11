@@ -73,7 +73,7 @@ the REPL instead of by Claude.
 - **There is no approval prompt.** Claude runs the commands and file edits it decides on, as
   your user, with no y/n in between. Built for local development. `trash` exists so deletes
   are at least recoverable.
-- It's your API key: one request can fan out into many tool calls (capped at 30 per turn).
+- It's your API key: one request can fan out into many tool calls (capped at 75 per turn).
 - `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
   Chain with `;` in one call, or use `python`, which keeps state.
 - Ask for files by absolute path. If Claude offers a download link instead, tell it you need
@@ -106,7 +106,7 @@ the REPL instead of by Claude.
   because each package is imported at the moment its tool is called, not at startup.
 - **Linting: one linter is configured, `ruff`, and `ruff check .` should pass.**
   `pyproject.toml` has a `[tool.ruff.lint]` section. It adds no rules — it only switches
-  three *off*, each with its reason written next to it, so a clean run is the expected
+  two *off*, each with its reason written next to it, so a clean run is the expected
   baseline and any finding you do see is genuinely new: your own code, or a rule a newer
   ruff added. (The rule selection is left at ruff's defaults, which do shift between
   versions.) Ruff is **not** a dependency and nothing runs it for you — install it yourself
