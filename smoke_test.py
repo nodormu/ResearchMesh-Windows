@@ -174,23 +174,40 @@ def check_mcp_server() -> None:
     env = dict(os.environ)
     env.setdefault("ANTHROPIC_API_KEY", "placeholder-not-used-for-list-tools")
 
-    async def go() -> list[str]:
+    async def go() -> tuple[list[str], list[str]]:
         async with MCPClient(
             command=sys.executable,
             args=[str(ROOT / "mcp_server.py")],
             env=env,
             transport="stdio",
         ) as client:
-            return [t.name for t in await client.list_tools()]
+            names = [t.name for t in await client.list_tools()]
+            # list_tools() alone never spawns a subprocess, so it can't
+            # exercise the one thing the SetStdHandle half of the stdout
+            # guard exists for — see the core/kernel.py and mcp_server.py
+            # bullets in CLAUDE.md's Architecture section, which name the
+            # IPython kernel as "the live case" for a subprocess inheriting
+            # the real stdout handle on Windows. Run it for real here, no
+            # Anthropic API involved either way.
+            await client.call_tool("python", {"code": "1 + 1"})
+            # The actual proof: a corrupted channel fails on the NEXT read,
+            # not necessarily the call that caused the corruption.
+            names_after = [t.name for t in await client.list_tools()]
+            return names, names_after
 
     try:
-        names = asyncio.run(asyncio.wait_for(go(), timeout=120))
+        names, names_after = asyncio.run(asyncio.wait_for(go(), timeout=120))
     except Exception as e:
         check("handshake completes", False, f"{type(e).__name__}: {e}")
         return
 
     check("handshake completes", True)
     check("advertises `delegate`", "delegate" in names, f"got {names}")
+    check(
+        "channel survives running a subprocess-spawning tool",
+        names_after == names,
+        f"got {names_after}",
+    )
 
 
 def check_compiles() -> None:
