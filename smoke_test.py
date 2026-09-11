@@ -12,9 +12,12 @@ is the wiring that breaks silently and that nothing else catches:
   3. the tool count the docs claim still matches reality
   4. mcp_server.py completes an MCP handshake and advertises `delegate`
 
-(3) exists because this project states its tool count in five places across two
-files, and (4) because the stdio server's one fatal failure mode — a stray byte
-on stdout desynchronising JSON-RPC — is invisible until a client connects.
+(3) exists because this project states its tool count in enough places, phrased
+several different ways, that hand-checking them drifts silently — see
+check_docs_match_code()'s own docstring for the exact phrasings this guards
+against. (4) exists because the stdio server's one fatal failure mode — a
+stray byte on stdout desynchronising JSON-RPC — is invisible until a client
+connects.
 
 (4) only runs on Windows and is reported as a skip elsewhere: the stdout guard
 it exercises is built on `msvcrt` and `SetStdHandle`, so off Windows the server
