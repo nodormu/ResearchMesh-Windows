@@ -114,6 +114,25 @@ Actions:
                    "Standard Time Code" format) plus RESPONSE ERROR;
                    anything else comes back as an "unknown" type with the
                    raw name byte rather than being guessed at.
+  - run_clock    : drive a real, precisely-paced 24-pulses-per-quarter-note
+                   MIDI Clock stream on an open output handle for a fixed
+                   duration, with an optional Start/Continue sent once
+                   before it begins and an optional Stop once it ends.
+                   Exists because 'send' fires exactly one message per
+                   tool call — fine for one-off messages, but hopeless for
+                   anything needing real sub-20ms-at-typical-tempo pacing:
+                   confirmed live against a Roland TR-8S set to follow
+                   external (USB) clock — a bare 'send' of 'start' alone
+                   only armed the transport (solid, non-blinking Play LED,
+                   no actual playback), and manually looping individual
+                   'send' calls for Clock was far too slow/jittery to
+                   drive real tempo. 'run_clock' paces the whole stream
+                   itself using a real monotonic schedule (like the
+                   working ad-hoc `mido`-in-the-python-tool recipe this
+                   generalizes), entirely within one blocking call —
+                   see execute()'s duration-aware timeout extension
+                   below, the same mechanism 'poll's own
+                   'timeout_seconds' already uses.
 
 SysEx note: 'sysex' takes a 'data' array of integers, each 0-127
 (7-bit data bytes only — MIDI's own spec forbids status-byte values 0x80+
@@ -286,7 +305,40 @@ TOOLS = [
             "'messages' — a flat array of {'type':'sysex','data':[...]} "
             "objects. On success, returns the same structured summary "
             "'read_midi_file' would produce for the file just written, as "
-            "a built-in round-trip sanity check."
+            "a built-in round-trip sanity check. "
+            "'run_clock' drives a real, precisely-paced MIDI Real-Time "
+            "Clock stream (24 pulses per quarter note) on an open output "
+            "handle for a fixed duration — for hardware that's been set "
+            "to follow an EXTERNAL clock/transport source (common on "
+            "grooveboxes/drum machines with a 'sync source' menu set to "
+            "MIDI/USB/AUTO rather than INTERNAL), a single 'send' of "
+            "'start' alone typically only ARMS the transport; the device "
+            "then waits for actual Clock pulses to advance, and pulses "
+            "sent one 'send' call at a time can't be paced tightly enough "
+            "(round-trip call latency dwarfs the ~20ms/tick a musical "
+            "tempo needs) — hence this dedicated, self-contained action "
+            "that paces the whole stream internally with a real "
+            "monotonic schedule instead of depending on per-message call "
+            "timing. Required: 'handle' (an open OUTPUT handle), 'bpm' "
+            "(20-300), 'duration_seconds' (0 exclusive to 120 inclusive — "
+            "capped short deliberately, since unlike 'poll' this is "
+            "ACTIVELY driving hardware I/O the whole time, not just "
+            "idly waiting; call again for a longer run). Optional "
+            "'transport' — 'start' (default, sent once before the clock "
+            "stream begins), 'continue' (resume rather than restart-from-"
+            "beginning, on gear that distinguishes the two), or 'none' "
+            "(send bare Clock only, no transport message at all — for "
+            "tempo-following without triggering play/already-started "
+            "gear). Optional 'stop_at_end' (boolean, default true) — "
+            "sends a 'stop' message once the clock stream finishes; set "
+            "false to leave the receiving device running/armed on its "
+            "own after this call returns. The call blocks for "
+            "approximately 'duration_seconds' (the tool's own timeout is "
+            "extended to accommodate this, same mechanism as 'poll's "
+            "'timeout_seconds'). Returns 'ticks_sent', 'elapsed_seconds' "
+            "(actual measured wall-clock duration of the clock stream, "
+            "for comparing against the requested 'duration_seconds'), "
+            "'transport_sent', and 'stop_sent'."
         ),
         "input_schema": {
             "type": "object",
@@ -296,7 +348,7 @@ TOOLS = [
                     "enum": [
                         "list_devices", "open", "close", "send", "poll",
                         "read_midi_file", "write_midi_file",
-                        "decode_mmc_response",
+                        "decode_mmc_response", "run_clock",
                     ],
                     "description": "Which MIDI operation to perform.",
                 },
@@ -329,6 +381,48 @@ TOOLS = [
                         "many seconds elapse, returning early as soon as "
                         "something shows up rather than always waiting "
                         "the full duration."
+                    ),
+                },
+                "bpm": {
+                    "type": "number",
+                    "description": (
+                        "Required for 'run_clock'. Tempo in beats per "
+                        "minute, 20-300. Converted internally to a "
+                        "24-pulses-per-quarter-note MIDI Clock interval "
+                        "(seconds/tick = 60/bpm/24)."
+                    ),
+                },
+                "duration_seconds": {
+                    "type": "number",
+                    "description": (
+                        "Required for 'run_clock'. How long to run the "
+                        "Clock stream, > 0 and <= 120 seconds. The tool "
+                        "call itself blocks for approximately this long — "
+                        "call again for a longer run rather than raising "
+                        "this past the cap."
+                    ),
+                },
+                "transport": {
+                    "type": "string",
+                    "enum": ["start", "continue", "none"],
+                    "description": (
+                        "Optional for 'run_clock', default 'start'. "
+                        "Which (if any) MIDI Real-Time transport message "
+                        "to send once, immediately before the Clock "
+                        "stream begins: 'start' (from the beginning), "
+                        "'continue' (resume, on gear that distinguishes "
+                        "the two), or 'none' (bare Clock only, e.g. for "
+                        "tempo-following gear that's already running/"
+                        "armed by other means)."
+                    ),
+                },
+                "stop_at_end": {
+                    "type": "boolean",
+                    "description": (
+                        "Optional for 'run_clock', default true. Sends a "
+                        "'stop' message once the Clock stream finishes. "
+                        "Set false to leave the receiving device running/"
+                        "armed on its own after this call returns."
                     ),
                 },
                 "path": {
@@ -765,17 +859,40 @@ _MAX_POLL_TIMEOUT = 60.0
 # just an empty, well-behaved wait.
 _POLL_TIMEOUT_MARGIN = 2.0
 
+# Upper bound on 'run_clock's own `duration_seconds` parameter (see
+# `_run_clock`). Deliberately much shorter than _MAX_POLL_TIMEOUT: `poll`
+# with a long timeout is just idly waiting, but `run_clock` is ACTIVELY
+# generating hardware I/O the entire time it runs, so an abandoned/long
+# call here means real MIDI traffic (and a real occupied thread-pool
+# slot, see the leak note above) for the full duration, not just a wait.
+# Call again for a longer run rather than raising this.
+_MAX_CLOCK_DURATION = 120.0
+
+# Mirrors _POLL_TIMEOUT_MARGIN's role but for 'run_clock': how much longer
+# than the caller's own requested `duration_seconds` the outer
+# asyncio.wait_for wrapper allows before it gives up — must comfortably
+# exceed the time `_run_clock`'s own internal clock loop needs to finish
+# and send its optional trailing Stop message.
+_CLOCK_TIMEOUT_MARGIN = 5.0
+
 
 async def execute(name: str, tool_input: dict) -> str:
     if name != "midi1":
         return json.dumps({"error": f"unknown midi1 tool {name!r}"})
 
     effective_timeout = _DEFAULT_TIMEOUT
-    if tool_input.get("action") == "poll":
+    action = tool_input.get("action")
+    if action == "poll":
         requested = tool_input.get("timeout_seconds")
         if isinstance(requested, (int, float)) and not isinstance(requested, bool):
             effective_timeout = max(
                 _DEFAULT_TIMEOUT, requested + _POLL_TIMEOUT_MARGIN
+            )
+    elif action == "run_clock":
+        requested = tool_input.get("duration_seconds")
+        if isinstance(requested, (int, float)) and not isinstance(requested, bool):
+            effective_timeout = max(
+                _DEFAULT_TIMEOUT, requested + _CLOCK_TIMEOUT_MARGIN
             )
 
     try:
@@ -815,10 +932,12 @@ def _run(tool_input: dict) -> str:
         return _write_midi_file(tool_input)
     if action == "decode_mmc_response":
         return _decode_mmc_response(tool_input)
+    if action == "run_clock":
+        return _run_clock(tool_input)
     return _err(
         f"unknown action {action!r} — expected one of "
         "list_devices, open, close, send, poll, read_midi_file, "
-        "write_midi_file, decode_mmc_response"
+        "write_midi_file, decode_mmc_response, run_clock"
     )
 
 
@@ -4331,6 +4450,94 @@ def _poll(tool_input: dict) -> str:
         messages.append({"received_at": received_at, "message": msg_str})
 
     return json.dumps({"status": "ok", "messages": messages})
+
+
+# Real-Time Clock is defined as 24 pulses per quarter note by the MIDI 1.0
+# spec itself (not a mido/rtmidi convention) — this is the same constant
+# every sequencer/DAW's own clock implementation uses, so `bpm` converts to
+# a per-tick interval via 60/bpm/24 with no further tunable.
+_CLOCK_PULSES_PER_QUARTER_NOTE = 24
+
+
+def _run_clock(tool_input: dict) -> str:
+    handle = tool_input.get("handle")
+    entry = _OPEN_PORTS.get(handle) if handle else None
+    if entry is None:
+        return _err(f"no open port for handle {handle!r}")
+    direction, port = entry
+    if direction != "output":
+        return _err(f"handle {handle!r} is an input port, cannot run_clock on it")
+
+    bpm = tool_input.get("bpm")
+    if not isinstance(bpm, (int, float)) or isinstance(bpm, bool):
+        return _err("'bpm' is required and must be a number for 'run_clock'")
+    if not (20 <= bpm <= 300):
+        return _err(f"'bpm' must be 20-300, got {bpm!r}")
+
+    duration_seconds = tool_input.get("duration_seconds")
+    if not isinstance(duration_seconds, (int, float)) or isinstance(duration_seconds, bool):
+        return _err(
+            "'duration_seconds' is required and must be a number for 'run_clock'"
+        )
+    if not (0 < duration_seconds <= _MAX_CLOCK_DURATION):
+        return _err(
+            f"'duration_seconds' must be > 0 and <= {_MAX_CLOCK_DURATION}, "
+            f"got {duration_seconds!r}"
+        )
+
+    transport = tool_input.get("transport", "start")
+    if transport not in ("start", "continue", "none"):
+        return _err("'transport' must be 'start', 'continue', or 'none'")
+
+    stop_at_end = tool_input.get("stop_at_end", True)
+    if not isinstance(stop_at_end, bool):
+        return _err("'stop_at_end' must be a boolean")
+
+    interval = 60.0 / bpm / _CLOCK_PULSES_PER_QUARTER_NOTE
+    n_ticks = int(duration_seconds / interval)
+
+    try:
+        transport_sent = None
+        if transport != "none":
+            port.send(mido.Message(transport))
+            transport_sent = transport
+
+        # Schedule against an ABSOLUTE running clock (next_tick += interval
+        # each iteration), not a naive `time.sleep(interval)` per loop —
+        # the latter accumulates drift equal to however long each
+        # port.send() itself takes, which compounds over hundreds of
+        # ticks. This is the exact pattern proven live against a real
+        # TR-8S (see the module docstring's 'run_clock' entry): 720 ticks
+        # at 120 BPM measured 14.98s elapsed against a 15.00s target.
+        start_time = time.time()
+        next_tick = start_time
+        for _ in range(n_ticks):
+            now = time.time()
+            sleep_time = next_tick - now
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            port.send(mido.Message("clock"))
+            next_tick += interval
+        elapsed = time.time() - start_time
+
+        stop_sent = False
+        if stop_at_end:
+            port.send(mido.Message("stop"))
+            stop_sent = True
+    except Exception as e:
+        return _err(f"run_clock failed: {type(e).__name__}: {e}")
+
+    return json.dumps(
+        {
+            "status": "ok",
+            "handle": handle,
+            "bpm": bpm,
+            "ticks_sent": n_ticks,
+            "elapsed_seconds": round(elapsed, 3),
+            "transport_sent": transport_sent,
+            "stop_sent": stop_sent,
+        }
+    )
 
 
 def _read_midi_file(tool_input: dict) -> str:
