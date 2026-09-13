@@ -7,6 +7,7 @@ from prompt_toolkit.styles import Style
 
 from core import listen, speak
 from core.chat import Chat
+from core.claude import load_claude_models, resolve_model_swap
 
 
 class CliApp:
@@ -124,6 +125,56 @@ class CliApp:
                             f"[listen: {result.get('status')} — "
                             f"{result.get('reason', result.get('error', ''))}]"
                         )
+                    continue
+
+                # /model lists config.toml's claude_models (re-read fresh
+                # each call, see core/claude.py's load_claude_models — an
+                # edit to config.toml shows up without a restart). /model
+                # swap <name/index> actually changes it: session-only, it
+                # never writes config.toml, so a new session always starts
+                # back on claude_models[0]. An invalid name/index rejects
+                # with an error and the valid list, same reject-don't-crash
+                # pattern as /voice and /listen above.
+                if text == "/model" or text.startswith("/model "):
+                    rest = text[len("/model"):].strip()
+                    parts = rest.split(None, 1)
+                    sub = parts[0] if parts else ""
+                    arg = parts[1].strip() if len(parts) > 1 else ""
+
+                    try:
+                        models = load_claude_models()
+                    except ValueError as e:
+                        print(f"[model: {e}]")
+                        continue
+
+                    if not sub:
+                        current = self.agent.claude_service.model
+                        lines = [
+                            f"  {i}. {m}" + ("  (current)" if m == current else "")
+                            for i, m in enumerate(models, start=1)
+                        ]
+                        print("[model: available]\n" + "\n".join(lines))
+                        continue
+
+                    if sub == "swap":
+                        if not arg:
+                            print("[usage: /model swap <name or index>]")
+                            continue
+                        chosen = resolve_model_swap(models, arg)
+                        if chosen is None:
+                            print(
+                                f"[model: {arg!r} not recognized — "
+                                "run /model to see the list]"
+                            )
+                            continue
+                        self.agent.claude_service.model = chosen
+                        print(f"[model: swapped to {chosen}]")
+                        continue
+
+                    print(
+                        f"[model: unrecognized subcommand {sub!r} — "
+                        "use /model or /model swap <name/index>]"
+                    )
                     continue
 
                 await self._submit(text)

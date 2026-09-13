@@ -8,7 +8,7 @@ from anthropic import Anthropic
 
 from core import local_tools
 from core.chat import Chat
-from core.claude import Claude
+from core.claude import Claude, refresh_claude_models
 from core.cli import CliApp
 from mcp_client import MCPClient
 
@@ -36,10 +36,18 @@ def _load_config() -> dict:
 
 _config = _load_config()
 
-# Claude model: config.toml [claude] model, overridable by the CLAUDE_MODEL env var.
-claude_model = os.getenv("CLAUDE_MODEL") or _config.get("claude", {}).get(
-    "model", "claude-sonnet-5"
-)
+# Claude model: config.toml [claude] claude_models — the first entry is what
+# every new session starts on. refresh_claude_models() is the TTL-gated live
+# scan (see core/claude.py): most process starts just read the cached array
+# below with no network call at all; roughly once a day it re-scans
+# Anthropic's real /v1/models and updates config.toml's cache in place. No
+# env var override — config.toml is the single source of truth (swapping
+# mid-session is /model swap's job, not an env var's; see core/cli.py).
+# mcp_server.py does `import main as app` and reads `app.claude_model`
+# straight off this module, so a Router-spawned worker gets this same
+# live-verified default with no separate code path.
+_claude_models = refresh_claude_models()
+claude_model = _claude_models[0] if _claude_models else "claude-sonnet-5"
 
 # MCP servers (Streamable HTTP), declared as a list in config.toml so adding one
 # is a config edit rather than a code change. Bearer tokens stay in the

@@ -147,6 +147,270 @@ def check_docs_match_code() -> None:
         )
 
 
+def check_model_command() -> None:
+    """`/model` / `/model swap` — config.toml wiring and index/name matching.
+
+    No API call and no CliApp/prompt_toolkit involved: `load_claude_models`
+    and `resolve_model_swap` (core/claude.py) are pure enough to check
+    directly, the same way check_clear_and_diagnostics() below checks
+    core/chat.py's diagnostics without a real conversation. core/cli.py's
+    `/model` branch is a thin print/continue wrapper around these two calls,
+    so covering the calls covers the actual matching logic that a bad
+    index/name could otherwise silently mismatch.
+    """
+    print("/model command")
+    from core.claude import load_claude_models, resolve_model_swap
+
+    models = load_claude_models()
+    check("claude_models is non-empty", len(models) > 0, str(models))
+    check(
+        "claude_models entries are all strings",
+        all(isinstance(m, str) for m in models),
+        str(models),
+    )
+
+    # Index matching (1-based, as shown in /model's own listing).
+    check("index 1 resolves to the first entry", resolve_model_swap(models, "1") == models[0])
+    last = str(len(models))
+    check(
+        f"index {last} resolves to the last entry",
+        resolve_model_swap(models, last) == models[-1],
+    )
+    check("index 0 is out of range", resolve_model_swap(models, "0") is None)
+    check(
+        "an index past the end is out of range",
+        resolve_model_swap(models, str(len(models) + 1)) is None,
+    )
+
+    # Name matching, case-insensitive, whitespace-tolerant.
+    check(
+        "exact name matches",
+        resolve_model_swap(models, models[0]) == models[0],
+    )
+    check(
+        "matching is case-insensitive",
+        resolve_model_swap(models, models[0].upper()) == models[0],
+    )
+    check(
+        "matching tolerates surrounding whitespace",
+        resolve_model_swap(models, f"  {models[0]}  ") == models[0],
+    )
+    check(
+        "an unrecognized name resolves to None",
+        resolve_model_swap(models, "not-a-real-model") is None,
+    )
+    check("an empty arg resolves to None", resolve_model_swap(models, "") is None)
+
+
+def check_model_refresh() -> None:
+    """fetch_live_models()/refresh_claude_models() — the live-scan + TTL cache
+    behind config.toml's claude_models array.
+
+    Neither function is exercised by check_model_command() above (that one
+    only covers the pre-existing load_claude_models()/resolve_model_swap()).
+    Both accept fake collaborators for exactly this reason — fetch_live_models
+    takes a `client`, refresh_claude_models takes `config_path`/`fetch_fn` —
+    the same dependency-injection shape check_clear_and_diagnostics() below
+    uses (a FakeBlock duck-typing a real content block). No network, no real
+    config.toml touched, no tempfile left behind.
+
+    refresh_claude_models's whole point is "never write on failure, only ever
+    write on a successful scan" — that is asserted directly here (byte-for-
+    byte file comparison before/after), not just exercised incidentally, so a
+    future edit that weakens that guarantee fails loudly instead of only
+    showing up as a mystery CI config.toml diff months later. tomlkit is
+    imported lazily inside refresh_claude_models() only on a successful
+    scan's write — if it isn't installed (true for CI's minimal dependency
+    set), the success-path write is skipped in favour of a documented
+    fallback (return the fresh result, persist nothing), and this check
+    verifies whichever behaviour is actually correct for the environment
+    it's running in, rather than assuming tomlkit is present.
+    """
+    print("model refresh (fetch_live_models / refresh_claude_models)")
+    import importlib.util
+    import tomllib
+    from datetime import UTC, datetime, timedelta
+
+    from core.claude import fetch_live_models, refresh_claude_models
+
+    has_tomlkit = importlib.util.find_spec("tomlkit") is not None
+
+    # --- fetch_live_models(): pure grouping/sorting logic, fake client -----
+
+    class FakeModel:
+        def __init__(self, model_id: str, created_at: datetime):
+            self.id = model_id
+            self.created_at = created_at
+
+    class FakeModelsResource:
+        def __init__(self, models: list):
+            self._models = models
+
+        def list(self):
+            return list(self._models)
+
+    class FakeClient:
+        def __init__(self, models: list):
+            self.models = FakeModelsResource(models)
+
+    now = datetime.now(UTC)
+
+    # Sonnet exists but is NOT the newest release overall — it must still
+    # end up first, ahead of the genuinely newest family (opus here).
+    mixed = FakeClient(
+        [
+            FakeModel("claude-opus-9", now),
+            FakeModel("claude-opus-8", now - timedelta(days=30)),
+            FakeModel("claude-sonnet-9", now - timedelta(days=5)),
+            FakeModel("claude-sonnet-8", now - timedelta(days=40)),
+            FakeModel("claude-haiku-9", now - timedelta(days=10)),
+            FakeModel("not-a-claude-id-at-all", now),  # must be skipped, not crash
+        ]
+    )
+    result = fetch_live_models(client=mixed)  # type: ignore[arg-type]
+    check(
+        "sonnet is forced first even when not newest",
+        result[0] == "claude-sonnet-9",
+        str(result),
+    )
+    check(
+        "one entry per family, newest kept",
+        set(result) == {"claude-sonnet-9", "claude-opus-9", "claude-haiku-9"},
+        str(result),
+    )
+    check(
+        "non-family-matching ids are silently skipped",
+        "not-a-claude-id-at-all" not in result,
+        str(result),
+    )
+    check(
+        "remaining families stay in pure recency order",
+        result[1:] == ["claude-opus-9", "claude-haiku-9"],
+        str(result),
+    )
+
+    # No sonnet family at all -> pure recency order, no reordering applied.
+    no_sonnet = FakeClient(
+        [
+            FakeModel("claude-opus-1", now - timedelta(days=1)),
+            FakeModel("claude-haiku-1", now - timedelta(days=2)),
+        ]
+    )
+    check(
+        "with no sonnet family, order is pure recency",
+        fetch_live_models(client=no_sonnet) == ["claude-opus-1", "claude-haiku-1"],  # type: ignore[arg-type]
+    )
+
+    # --- refresh_claude_models(): TTL cache / write-on-success-only --------
+
+    def write_config(path: Path, *, models: list, checked_at, ttl_hours=24) -> None:
+        lines = ["[claude]", f"claude_models = {models!r}".replace("'", '"')]
+        if checked_at is not None:
+            lines.append(f'claude_models_checked_at = "{checked_at}"')
+        lines.append(f"model_scan_ttl_hours = {ttl_hours}")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def read_models(path: Path) -> list:
+        with open(path, "rb") as f:
+            return tomllib.load(f).get("claude", {}).get("claude_models")
+
+    tmp_dir = Path("/tmp") if sys.platform != "win32" else Path(os.environ["TEMP"])
+    fresh_iso = now.isoformat()
+    stale_iso = (now - timedelta(hours=48)).isoformat()
+
+    # 1) TTL fresh -> no scan attempted at all, cache returned untouched.
+    cfg = tmp_dir / "smoke_model_refresh_fresh.toml"
+    write_config(cfg, models=["cached-a", "cached-b"], checked_at=fresh_iso)
+    before = cfg.read_text(encoding="utf-8")
+    called = {"n": 0}
+
+    def should_not_be_called() -> list:
+        called["n"] += 1
+        raise AssertionError("fetch_fn should not run when the TTL is fresh")
+
+    try:
+        out = refresh_claude_models(config_path=cfg, fetch_fn=should_not_be_called)
+        check("fresh TTL returns the cached array", out == ["cached-a", "cached-b"], str(out))
+        check("fresh TTL never calls fetch_fn", called["n"] == 0)
+        check("fresh TTL leaves the file untouched", cfg.read_text(encoding="utf-8") == before)
+    finally:
+        cfg.unlink(missing_ok=True)
+
+    # 2) TTL stale + scan succeeds -> array + timestamp updated (if tomlkit
+    #    is installed) or the fresh result is still returned but not
+    #    persisted (if it isn't) — either way is the documented contract.
+    cfg = tmp_dir / "smoke_model_refresh_success.toml"
+    write_config(cfg, models=["old-a"], checked_at=stale_iso)
+    before = cfg.read_text(encoding="utf-8")
+    try:
+        out = refresh_claude_models(
+            config_path=cfg, fetch_fn=lambda: ["fresh-x", "fresh-y"]
+        )
+        check(
+            "stale + successful scan returns the fresh array",
+            out == ["fresh-x", "fresh-y"],
+            str(out),
+        )
+        if has_tomlkit:
+            check(
+                "successful scan persists the fresh array",
+                read_models(cfg) == ["fresh-x", "fresh-y"],
+                str(read_models(cfg)),
+            )
+            check(
+                "successful scan updates claude_models_checked_at",
+                "claude_models_checked_at" in cfg.read_text(encoding="utf-8"),
+            )
+        else:
+            check(
+                "without tomlkit, a successful scan still isn't persisted",
+                cfg.read_text(encoding="utf-8") == before,
+            )
+    finally:
+        cfg.unlink(missing_ok=True)
+
+    # 3) TTL stale (well past due) + scan fails -> config untouched, old
+    #    cache returned. This is the exact CI/placeholder-key scenario.
+    cfg = tmp_dir / "smoke_model_refresh_failure.toml"
+    write_config(cfg, models=["old-cached"], checked_at=stale_iso)
+    before = cfg.read_text(encoding="utf-8")
+
+    def failing_fetch() -> list:
+        raise RuntimeError("simulated network/auth failure")
+
+    try:
+        out = refresh_claude_models(config_path=cfg, force=True, fetch_fn=failing_fetch)
+        check("a failed scan returns the old cached array", out == ["old-cached"], str(out))
+        check(
+            "a failed scan leaves the file byte-for-byte untouched",
+            cfg.read_text(encoding="utf-8") == before,
+        )
+    finally:
+        cfg.unlink(missing_ok=True)
+
+    # 4) force=True bypasses an otherwise-fresh TTL.
+    cfg = tmp_dir / "smoke_model_refresh_forced.toml"
+    write_config(cfg, models=["cached-only"], checked_at=fresh_iso)
+    try:
+        out = refresh_claude_models(config_path=cfg, force=True, fetch_fn=lambda: ["forced"])
+        check("force=True overrides a fresh TTL", out == ["forced"], str(out))
+    finally:
+        cfg.unlink(missing_ok=True)
+
+    # 5) A malformed timestamp is treated as stale, not fatal.
+    cfg = tmp_dir / "smoke_model_refresh_malformed.toml"
+    write_config(cfg, models=["cached-only"], checked_at="not-a-real-timestamp")
+    try:
+        out = refresh_claude_models(config_path=cfg, fetch_fn=lambda: ["rescanned"])
+        check(
+            "a malformed checked_at is treated as stale, not fatal",
+            out == ["rescanned"],
+            str(out),
+        )
+    finally:
+        cfg.unlink(missing_ok=True)
+
+
 def check_mcp_server() -> None:
     """Spawn the real server over stdio and complete a handshake.
 
@@ -206,11 +470,113 @@ def check_mcp_server() -> None:
 
     check("handshake completes", True)
     check("advertises `delegate`", "delegate" in names, f"got {names}")
+    check("advertises `model`", "model" in names, f"got {names}")
     check(
         "channel survives running a subprocess-spawning tool",
         names_after == names,
         f"got {names_after}",
     )
+
+
+def check_model_tool_over_mcp() -> None:
+    """The `model` tool's actual list/swap/reject behavior, over a real
+    stdio MCP round trip — not just that it's advertised (check_mcp_server()
+    above only checks the name is in the list).
+
+    Windows-only for the same reason check_mcp_server() above is: off
+    Windows, mcp_server.py exits at import (its stdout guard needs
+    msvcrt/SetStdHandle), so this reports a skip rather than a fail —
+    matching this repo's own established convention for exactly this
+    problem, not inventing a new one.
+
+    Same placeholder-key posture as check_mcp_server(): `model` never calls
+    the Anthropic API at all (see mcp_server.py's `_model_tool_result` — it
+    only touches config.toml's claude_models array and the in-process
+    `_claude.model` attribute), so this needs no real key and no network,
+    same as every other check in this file. Exercises the exact same
+    reject-don't-crash paths core/cli.py's local `/model` command has —
+    covering the MCP-facing wrapper this worker adds specifically so a
+    caller like ResearchMesh-Router can swap this worker's model remotely,
+    per adding-model-command-to-swap-between-Anthropic-models.md in
+    /memories (Phase W3 of that plan's Windows port).
+    """
+    print("model tool (over stdio MCP)")
+
+    if sys.platform != "win32":
+        skip(
+            "model tool round trip completes",
+            f"needs Windows (running on {sys.platform}); mcp_server.py's "
+            "stdout guard uses msvcrt/SetStdHandle",
+        )
+        return
+
+    from mcp_client import MCPClient
+
+    env = dict(os.environ)
+    env.setdefault("ANTHROPIC_API_KEY", "placeholder-not-used-for-model-tool")
+
+    async def go() -> dict[str, tuple[str, bool]]:
+        results: dict[str, tuple[str, bool]] = {}
+        async with MCPClient(
+            command=sys.executable,
+            args=[str(ROOT / "mcp_server.py")],
+            env=env,
+            transport="stdio",
+        ) as client:
+
+            async def call(label: str, arguments: dict) -> None:
+                r = await client.call_tool("model", arguments)
+                text = r.content[0].text if r and r.content else ""  # type: ignore[union-attr]
+                is_error = bool(r.is_error) if r else True
+                results[label] = (text, is_error)
+
+            await call("list", {"action": "list"})
+            # index "2", deliberately NOT "1" — a fresh worker process starts
+            # on claude_models[0] (index 1), so swapping to that same index
+            # would be a no-op and the "current entry moved" check below
+            # would false-fail for a reason that has nothing to do with the
+            # tool actually working.
+            await call("swap valid", {"action": "swap", "arg": "2"})
+            await call("list after swap", {"action": "list"})
+            await call("swap bogus", {"action": "swap", "arg": "not-a-real-model"})
+            await call("swap no arg", {"action": "swap"})
+            await call("bad action", {"action": "nonsense"})
+        return results
+
+    try:
+        results = asyncio.run(asyncio.wait_for(go(), timeout=120))
+    except Exception as e:
+        check("model tool round trip completes", False, f"{type(e).__name__}: {e}")
+        return
+
+    check("model tool round trip completes", True)
+
+    list_text, list_err = results["list"]
+    check("list: not an error", not list_err, list_text)
+    check("list: shows available models", "[model: available]" in list_text, list_text)
+    check("list: marks a current entry", "(current)" in list_text, list_text)
+
+    swap_text, swap_err = results["swap valid"]
+    check("swap index 2: not an error", not swap_err, swap_text)
+    check("swap index 2: confirms the swap", "swapped to" in swap_text, swap_text)
+
+    relist_text, relist_err = results["list after swap"]
+    check("list after swap: not an error", not relist_err, relist_text)
+    check(
+        "list after swap: current entry moved",
+        relist_text != list_text,
+        relist_text,
+    )
+
+    bogus_text, bogus_err = results["swap bogus"]
+    check("swap bogus name: reports an error", bogus_err, bogus_text)
+    check("swap bogus name: names the bad arg", "not-a-real-model" in bogus_text, bogus_text)
+
+    noarg_text, noarg_err = results["swap no arg"]
+    check("swap with no arg: reports an error", noarg_err, noarg_text)
+
+    badaction_text, badaction_err = results["bad action"]
+    check("bad action: reports an error", badaction_err, badaction_text)
 
 
 def check_compiles() -> None:
@@ -306,7 +672,10 @@ def main() -> int:
         check_imports,
         check_tool_registry,
         check_docs_match_code,
+        check_model_command,
+        check_model_refresh,
         check_mcp_server,
+        check_model_tool_over_mcp,
         check_clear_and_diagnostics,
     ):
         step()

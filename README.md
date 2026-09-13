@@ -17,7 +17,10 @@
 > real Windows box.
 
                             ┌── /think
-						    ├── /clear
+                            ├── /clear
+                            ├── /voice
+                            ├── /listen
+                            ├── /model
                             │
                             ├── PowerShell
                             ├── Filesystem
@@ -168,6 +171,22 @@ the REPL instead of by Claude.
 - ** Using it **
   For extended thinking, type. **`/think <message>`** gives Claude longer to reason on hard problems;
   **`/clear`** drops the conversation without restarting the app; **Ctrl-C** exits and shuts everything down cleanly.
+  **`/voice [on|off]`** toggles whether Claude's replies are also spoken aloud (via `speak`,
+  local Piper TTS); **`/listen [N]`** records `N` seconds from your mic (default from
+  `[listen].default_duration_seconds`), transcribes it locally (faster-whisper), and
+  auto-submits the transcript as your next turn — no extra Enter needed, regardless of whether
+  `/voice` is on. Both need `[speak]`/`[listen]` configured in `config.toml` first (see the
+  tools table above); without that, `/voice` toggles but has nothing to speak, and `/listen`
+  reports a clear `not_configured`/`disabled` message.
+  **`/model`** lists the models in `config.toml`'s `[claude] claude_models`, each with an
+  index; **`/model swap <name or index>`** swaps the model for the rest of this session
+  only — it never edits `config.toml`, so the next new session always starts back on the
+  first entry in the list. That list itself is a live-refreshed cache, not hand-typed:
+  roughly once a day (`model_scan_ttl_hours`, default 24) it re-scans Anthropic's actual
+  `/v1/models` and rewrites `claude_models` to one entry per model family, newest release
+  first — sonnet is always placed first when present, matching Anthropic's own documented
+  default recommendation. A failed scan (offline, bad key) changes nothing on disk; the
+  existing cached list is used as-is.
 
 ## Setup (Windows)
 
@@ -516,7 +535,13 @@ Non-secret settings live in `config.toml`. Secrets stay in the environment — t
 
 ```toml
 [claude]
-model = "claude-sonnet-5"   # CLAUDE_MODEL overrides this
+# First entry is what a new session starts on; swap mid-session with
+# /model swap <name/index> (session-only, does not edit this file).
+# This array is a live-refreshed cache (see core/claude.py
+# refresh_claude_models), not hand-typed — shown here already populated.
+claude_models = ["claude-sonnet-5", "claude-fable-5-1", "claude-opus-5", "claude-haiku-4-5-20251001"]
+model_scan_ttl_hours = 24
+claude_models_checked_at = "2026-01-01T00:00:00+00:00"
 
 [mcp]
 enabled = true              # false skips every server; local tools still work
@@ -562,7 +587,6 @@ those you edit by hand.
 | `ANTHROPIC_API_KEY` | Required |
 | *(per server)* | Whatever each `token_env` names, e.g. `N8N_MCP_TOKEN` |
 | `RESEARCHMESH_MCP_TOKEN` | Bearer token clients must present to `mcp_server.py --transport streamable-http`; unset = no auth |
-| `CLAUDE_MODEL` | Override the model |
 | `CLAUDE_SHOW_USAGE=1` | Print token and prompt-cache counts per request |
 | `CLAUDE_MEMORY_DIR` | Where `memory` stores `/memories` (default `./memories`) |
 | `CLAUDE_DISPLAY_SIZE` | Logical screen size `computer` reports, e.g. `1280x800` |
@@ -583,10 +607,13 @@ both, or neither:
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
-`[mcp]` in [Configuration](#configuration) above. **As a server**, it hands another client the
-whole agent as one `delegate` tool, so Claude Code can offload what it structurally can't do
-itself: drive GUI apps, answer password / `[y/N]` prompts, keep a live Python kernel between
-steps, surf a real DOM, and reach ResearchMesh's own MCP servers.
+`[mcp]` in [Configuration](#configuration) above. **As a server**, it hands another client two
+tools: `delegate`, the whole agent in one call, so Claude Code can offload what it structurally
+can't do itself — drive GUI apps, answer password / `[y/N]` prompts, keep a live Python kernel
+between steps, surf a real DOM, and reach ResearchMesh's own MCP servers — and `model`, a direct
+list/swap of which Claude model *this* worker uses, the same mechanism as its own `/model`
+command but reachable remotely (no agent turn spent, no API call made just to check or change
+it).
 
 ### Add it to Claude Code
 

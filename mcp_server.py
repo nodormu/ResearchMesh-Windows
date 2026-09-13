@@ -1,11 +1,17 @@
-"""ResearchMesh as an MCP server — the whole agent behind one `delegate` tool.
+"""ResearchMesh as an MCP server — the whole agent behind a `delegate` tool,
+plus a small `model` control-plane tool alongside it.
 
-Point Claude Code (or any MCP client) at this file and it gains a single tool
-that hands a task to ResearchMesh, which then runs its own full agentic loop:
-all 18 local tools plus whatever `[mcp].servers` in config.toml connects to.
-Claude Code gets the finished result, not the intermediate tool traffic.
+Point Claude Code (or any MCP client) at this file and it gains `delegate`,
+which hands a task to ResearchMesh and runs its own full agentic loop: all 23
+local tools plus whatever `[mcp].servers` in config.toml connects to. Claude
+Code gets the finished result, not the intermediate tool traffic. It also
+gains `model`, a direct list/swap of which Claude model THIS worker uses —
+no agent turn spent, the same local mechanism as this worker's own `/model`
+command (core/claude.py's `load_claude_models`/`resolve_model_swap`), just
+reachable over MCP. This is what lets a caller like ResearchMesh-Router
+change a connected worker's model remotely, not just its own.
 
-**Why one tool instead of re-exporting all 18.**
+**Why `delegate` is one tool instead of re-exporting all 23.**
 `memory_20250818` and `computer_20251124` are *learned* schemas — Claude is
 trained on their exact shape, and `computer` additionally needs the
 `computer-use-2025-11-24` beta header on the request that declares it. Neither
@@ -16,10 +22,12 @@ discarded. Wrapping the loop keeps every one of them running against the API
 exactly as designed, and keeps `SYSTEM_PROMPT` (which explains the tools to the
 model actually calling them) in force.
 
-So the delegate is a self-contained agent, not an extension of the caller's
+So `delegate` is a self-contained agent, not an extension of the caller's
 toolset — the shell/editor overlap with Claude Code's own built-ins is the
 point, not redundancy, and the ~30-50 tool ceiling that governs `local_tools`
-doesn't apply here because the client only ever sees one tool.
+doesn't apply to it because the client only ever sees one tool standing in for
+all 23. `model` doesn't touch any of this reasoning — it never runs the agent
+loop, never calls the Anthropic API, and never grows past two tiny actions.
 
 Two transports:
 
@@ -230,7 +238,7 @@ from mcp.server.stdio import stdio_server
 import main as app
 from core import local_tools
 from core.chat import Chat
-from core.claude import Claude
+from core.claude import Claude, load_claude_models, resolve_model_swap
 
 _DELEGATE_DESCRIPTION = """\
 Hand a task to ResearchMesh, a full agent running on this machine, and get back \
@@ -270,6 +278,27 @@ say "now click the button below it" and it knows what "it" is. Use a fresh id \
 to start clean. Defaults to "default".\
 """
 
+_MODEL_DESCRIPTION = """\
+List or swap which Claude model THIS ResearchMesh worker uses for `delegate`. \
+No agent turn is spent on this and no Anthropic API call is made — it is a \
+direct, local list/swap, the exact same mechanism as this worker's own \
+`/model`/`/model swap` command, just reachable over MCP instead of typed at \
+this machine's own prompt.
+
+`action: "list"` returns the models available (from this worker's own \
+config.toml `[claude] claude_models` — a live-refreshed cache, see that \
+worker's own config comments for how often it rescans Anthropic's real \
+`/v1/models`), marking which one is current.
+
+`action: "swap"` requires `arg`: a 1-based index from the `"list"` output, \
+or a model name (case-insensitive, whitespace-tolerant). Applies immediately \
+to EVERY subsequent `delegate` call on this worker, in any session, until \
+changed again or this worker process restarts (back to its own config.toml \
+default — a swap here is session-process-only, never written to disk, \
+same as the local command). An unrecognized `arg` is rejected with an error; \
+nothing changes and no restart is needed to try again.\
+"""
+
 TOOLS = [
     types.Tool(
         name="delegate",
@@ -297,7 +326,34 @@ TOOLS = [
             },
             "required": ["task"],
         },
-    )
+    ),
+    types.Tool(
+        name="model",
+        description=_MODEL_DESCRIPTION,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "swap"],
+                    "description": (
+                        "'list' to see this worker's available models and "
+                        "which is current; 'swap' to change it (requires "
+                        "'arg')."
+                    ),
+                },
+                "arg": {
+                    "type": "string",
+                    "description": (
+                        "Required for action='swap': a 1-based index (as "
+                        "shown by 'list') or a model name. Ignored for "
+                        "action='list'."
+                    ),
+                },
+            },
+            "required": ["action"],
+        },
+    ),
 ]
 
 # One Chat per session id. Chat.messages is the entire conversation, so this is
@@ -328,6 +384,65 @@ def _text_result(text: str, *, is_error: bool = False) -> types.CallToolResult:
     )
 
 
+def _model_tool_result(arguments: dict) -> types.CallToolResult:
+    """`model` tool handler — list/swap THIS worker's own Claude model.
+
+    No agent turn, no `Chat`, no Anthropic API call at all: this mutates
+    `_claude.model` directly, the same module-level object every `delegate`
+    session already reads its model off of (see `_session()` above) — so a
+    swap here changes what every subsequent `delegate` call actually talks
+    to, from any session, immediately. Mirrors core/cli.py's local `/model`
+    command exactly (same load_claude_models()/resolve_model_swap() calls,
+    same reject-don't-crash posture on bad input) — just triggered by an MCP
+    caller instead of a person typing at this machine's own prompt.
+    """
+    if _claude is None:
+        # Same guard/reasoning as _session() above: run() always builds this
+        # before either transport starts serving, so a call can't arrive
+        # first in practice — stated rather than assumed.
+        return _text_result(
+            "Error: Claude service was not initialised before serving",
+            is_error=True,
+        )
+
+    action = arguments.get("action")
+    if action not in ("list", "swap"):
+        return _text_result(
+            f"Error: action must be 'list' or 'swap', got {action!r}",
+            is_error=True,
+        )
+
+    try:
+        models = load_claude_models()
+    except ValueError as e:
+        return _text_result(f"Error: {e}", is_error=True)
+
+    if action == "list":
+        current = _claude.model
+        lines = [
+            f"  {i}. {m}" + ("  (current)" if m == current else "")
+            for i, m in enumerate(models, start=1)
+        ]
+        return _text_result("[model: available]\n" + "\n".join(lines))
+
+    arg = arguments.get("arg") or ""
+    if not arg:
+        return _text_result(
+            "Error: 'arg' is required for action='swap' (a 1-based index "
+            "or model name)",
+            is_error=True,
+        )
+    chosen = resolve_model_swap(models, arg)
+    if chosen is None:
+        return _text_result(
+            f"Error: {arg!r} not recognized — call action='list' to see "
+            "the options",
+            is_error=True,
+        )
+    _claude.model = chosen
+    return _text_result(f"[model: swapped to {chosen}]")
+
+
 # Handlers are plain functions registered on the Server below, not decorated
 # ones: mcp 2.0 removed `@server.list_tools()` / `@server.call_tool()` in favour
 # of constructor `on_*` arguments (and `add_request_handler()` for methods
@@ -343,10 +458,14 @@ async def list_tools(
 async def call_tool(
     ctx: ServerRequestContext, params: types.CallToolRequestParams
 ) -> types.CallToolResult:
+    arguments = params.arguments or {}
+
+    if params.name == "model":
+        return _model_tool_result(arguments)
+
     if params.name != "delegate":
         return _text_result(f"Unknown tool: {params.name}", is_error=True)
 
-    arguments = params.arguments or {}
     task = arguments.get("task", "")
     if not task.strip():
         return _text_result("Error: no task provided", is_error=True)

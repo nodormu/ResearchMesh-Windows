@@ -4,8 +4,31 @@
 # names the environment variable that holds its token (see README.md).
 
 [claude]
-# Anthropic model to use. The CLAUDE_MODEL environment variable overrides this.
-model = "claude-sonnet-5"
+# Anthropic models available to use/swap to via /model. This array is a
+# CACHE, not hand-typed — core/claude.py's refresh_claude_models() live-scans
+# Anthropic's own /v1/models roughly once a day (see model_scan_ttl_hours
+# below) and rewrites it here, one entry per model family (sonnet/opus/
+# haiku/...), newest release first — except sonnet is always placed first
+# when present, matching Anthropic's own documented default recommendation.
+# A new session always starts on the FIRST model in this list. Swap
+# mid-session with /model swap <name/index>; that swap is session-only
+# and does not edit this file. Hand-editing this array still works (e.g. to
+# pin a specific dated snapshot) — it just gets overwritten on the next scan
+# once claude_models_checked_at goes stale.
+claude_models = ["claude-sonnet-5", "claude-fable-5-1", "claude-opus-5", "claude-haiku-4-5-20251001"]
+
+# Set automatically by refresh_claude_models() whenever claude_models above
+# is refreshed from a live scan. Do not hand-edit except to force an
+# immediate rescan on the next startup by deleting this line entirely.
+# claude_models_checked_at = "2026-01-01T00:00:00+00:00"
+
+# How many hours a live scan result is trusted before refresh_claude_models()
+# re-scans /v1/models again. 24 is the default if this key is absent —
+# Anthropic doesn't ship new models more than roughly once a day, and a
+# smaller number just adds network calls to every other process start for
+# no practical benefit.
+model_scan_ttl_hours = 24
+claude_models_checked_at = "2026-09-13T23:24:34.697940+00:00"
 
 [mcp]
 # Set enabled = false to skip every MCP server and run with local tools only.
