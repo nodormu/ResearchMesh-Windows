@@ -28,7 +28,7 @@ claude_models = ["claude-sonnet-5", "claude-fable-5-1", "claude-opus-5", "claude
 # smaller number just adds network calls to every other process start for
 # no practical benefit.
 model_scan_ttl_hours = 24
-claude_models_checked_at = "2026-09-13T23:24:34.697940+00:00"
+claude_models_checked_at = "2026-09-17T20:45:23.493581+00:00"
 
 [mcp]
 # Set enabled = false to skip every MCP server and run with local tools only.
