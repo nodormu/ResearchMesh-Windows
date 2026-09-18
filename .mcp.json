@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "researchmesh-windows": {
-      "command": "${USERPROFILE}\\tif-env\\Scripts\\python.exe",
+      "command": "${USERPROFILE}\\pvenv\\Scripts\\python.exe",
       "args": ["${USERPROFILE}\\ResearchMesh-Windows\\mcp_server.py"],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
