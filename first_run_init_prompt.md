@@ -68,3 +68,7 @@ is ever wanted later — after a major Windows upgrade, a hardware swap, or just
 the notes feel badly out of date rather than just one or two facts — it's fine to
 re-run these exact instructions again on purpose, not just rely on the fact-by-fact
 re-check hints already accumulated in the files.
+
+**.mcp.json file in parent repor for this project** Please update the command and args 
+path to match the users installation, otherwise this may cause issues when Claude tries
+to add this MCP server. If you can not do such, then prompt the user to do it themselves.
