@@ -92,7 +92,10 @@ means the finding is new: either something you just wrote, or a rule a newer ruf
 (`select` is deliberately left at ruff's defaults, which do shift between versions —
 `BLE001`/`S110`/`PLW1510` only began appearing around 0.16). Triage it rather than assuming
 it's more of the same. Ruff is a project dependency (`requirements.txt`/`pyproject.toml`) as
-of an explicit user request; CI installs and runs it independent of that either way.
+of an explicit user request. **It was already actually being run before that, though** —
+CI (`.github/workflows/ci.yml`, see the next paragraph) has always installed and run
+`ruff check .` on every push/PR, regardless of whether ruff was ever listed as a pip
+dependency; "not a dependency" never meant "not used."
 
 **`python smoke_test.py` is the other gate**, and CI (`.github/workflows/ci.yml`) runs it plus
 `ruff` and `mypy` on every push and PR to `main`. It is not a test suite: it never exercises a
