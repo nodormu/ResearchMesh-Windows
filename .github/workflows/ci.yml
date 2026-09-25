@@ -124,7 +124,11 @@ jobs:
           # git's -E has no lookahead, so "value that doesn't start with $" is
           # spelled as a first character that is neither $ nor a closing quote.
           # That passes "${ANTHROPIC_API_KEY}" and catches a pasted-in literal.
-          git grep -nIE '"(ANTHROPIC_API_KEY|RESEARCHMESH_MCP_TOKEN)"[[:space:]]*:[[:space:]]*"[^$"][^"]{7,}"' -- '*.json'
+          # `RESEARCHMESH_MCP_TOKEN` is only the *default* --token-env name;
+          # docs explicitly say it's renameable (`--token-env VAR`), so a
+          # hardcoded single name would miss a renamed token leaking under
+          # its own key. Match any ALL_CAPS key ending in _TOKEN instead.
+          git grep -nIE '"(ANTHROPIC_API_KEY|[A-Z_]*_TOKEN)"[[:space:]]*:[[:space:]]*"[^$"][^"]{7,}"' -- '*.json'
           if ($LASTEXITCODE -eq 0) {
             # Single-quoted deliberately: in a double-quoted string PowerShell
             # would expand ${VAR}, printing an empty name in the very message
