@@ -42,11 +42,12 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**23 local tools**, plus whatever your MCP servers expose:
+**24 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
 | `powershell` | PowerShell commands as your user. Stateless — fresh process each call |
+| `powershell_session` | The stateful alternative: one real `pwsh` process that survives across calls — **cd/`$env:`/variables/functions/modules persist** |
 | `str_replace_based_edit_tool` | View, create, and edit files. Preserves each file's existing line endings |
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
@@ -83,7 +84,7 @@ the REPL instead of by Claude.
   systems everyone else's work goes through — a CRM/CMDB (ServiceNow, ConnectWise,
   whatever the organization already runs) as its system of record, change tickets
   opened for anything that touches production. Those are examples, not a fixed list.
-  None of that is built into this app's 23 tools directly; it's what
+  None of that is built into this app's 24 tools directly; it's what
   [MCP, in both directions](#mcp-in-both-directions) is *for* — connect it to an
   email MCP server, a Teams/Slack one, your CMDB's — and it participates the same way
   a new hire would, through the same front doors, not a side channel. That reframes
@@ -608,7 +609,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            23 local tools           [mcp] in config.toml
+     mcp_server.py            24 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's

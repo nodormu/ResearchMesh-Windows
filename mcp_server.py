@@ -2,7 +2,7 @@
 plus a small `model` control-plane tool alongside it.
 
 Point Claude Code (or any MCP client) at this file and it gains `delegate`,
-which hands a task to ResearchMesh and runs its own full agentic loop: all 23
+which hands a task to ResearchMesh and runs its own full agentic loop: all 24
 local tools plus whatever `[mcp].servers` in config.toml connects to. Claude
 Code gets the finished result, not the intermediate tool traffic. It also
 gains `model`, a direct list/swap of which Claude model THIS worker uses —
@@ -11,7 +11,7 @@ command (core/claude.py's `load_claude_models`/`resolve_model_swap`), just
 reachable over MCP. This is what lets a caller like ResearchMesh-Router
 change a connected worker's model remotely, not just its own.
 
-**Why `delegate` is one tool instead of re-exporting all 23.**
+**Why `delegate` is one tool instead of re-exporting all 24.**
 `memory_20250818` and `computer_20251124` are *learned* schemas — Claude is
 trained on their exact shape, and `computer` additionally needs the
 `computer-use-2025-11-24` beta header on the request that declares it. Neither
@@ -26,7 +26,7 @@ So `delegate` is a self-contained agent, not an extension of the caller's
 toolset — the shell/editor overlap with Claude Code's own built-ins is the
 point, not redundancy, and the ~30-50 tool ceiling that governs `local_tools`
 doesn't apply to it because the client only ever sees one tool standing in for
-all 23. `model` doesn't touch any of this reasoning — it never runs the agent
+all 24. `model` doesn't touch any of this reasoning — it never runs the agent
 loop, never calls the Anthropic API, and never grows past two tiny actions.
 
 Two transports:

@@ -26,6 +26,7 @@ from core import (
     memory,
     midi1,
     powershell,
+    powershell_session,
     processes,
     speak,
     text_embeddings,
@@ -36,6 +37,7 @@ from core import claude_learned_schemas as learned
 MODULES = [
     learned,     # text editor, web_search, web_fetch
     powershell,  # the shell
+    powershell_session,  # persistent pwsh: cd/vars/functions survive calls
     memory,      # cross-session memory (learned schema)
     computer,    # screen/mouse/keyboard control (learned schema, beta-gated)
     browser,     # Playwright DOM surfing
@@ -100,6 +102,7 @@ async def shutdown():
         ("kernel", kernel.shutdown),
         ("sql_query", data.close),
         ("midi1", midi1.close_all),
+        ("powershell_session", powershell_session.shutdown),
     ):
         try:
             result = close()
