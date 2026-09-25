@@ -56,7 +56,7 @@ look like its own cause: **`python-rtmidi` (backing `midi1`) has no prebuilt whe
 Python 3.13/3.14 as of writing, on any OS.** Without the MSVC compiler present, pip's
 source-build fallback fails — and because `pip install -r requirements.txt` installs
 everything in one all-or-nothing batch, that single failure takes the *entire*
-install down with it (sound packages, `httpx`, everything), with no error that
+install down with it (sound packages, `httpx2`, everything), with no error that
 obviously points at `mido`/`rtmidi` as the cause. If `midi1` isn't needed, commenting
 out the `mido[ports-rtmidi]` line in `requirements.txt` sidesteps the whole problem —
 it's the one dependency currently known to be capable of taking the rest down with it
@@ -281,7 +281,7 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   `"simple"` one (`{"text": [...]}`) for a bespoke server; either way the response is
   read permissively (`{"data": [{"embedding": ...}]}`, `{"embedding": ...}`, or
   `{"embeddings": [[...]]}` are all accepted). Needs no `ctypes`, no path-separator
-  handling, and no platform branch of its own — it's pure `httpx` + `tomllib` reading
+  handling, and no platform branch of its own — it's pure `httpx2` + `tomllib` reading
   one config table and making one HTTP call.
 
 - **`core/vision.py`** — `vision_query`: asks a question about an image via whatever
@@ -300,7 +300,7 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   the same image after that is a separate, explicit-consent decision made in
   conversation, never automatic, and stated directly in the tool's own `description`
   field so this holds even in a fresh session. Needs no `ctypes`, no path-separator
-  handling, and no platform branch of its own — it's pure `httpx` + `tomllib`, same
+  handling, and no platform branch of its own — it's pure `httpx2` + `tomllib`, same
   shape as `text_embeddings` above.
 
 - **`core/speak.py`** — `speak`: text-to-speech through a local Piper voice model,

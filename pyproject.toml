@@ -38,10 +38,9 @@ dependencies = [
     "send2trash>=1.8",
     "pyautogui>=0.9.54",
     "pillow>=10.0",
-    "httpx>=0.24",             # text_embeddings/vision_query — NOT pulled in by
-                               # anthropic anymore as of anthropic>=1 (its HTTP layer
-                               # moved to httpx2); an independent requirement now, see
-                               # requirements.txt for the full note
+    "httpx2",                  # text_embeddings/vision_query — already pulled in
+                               # transitively by both anthropic and mcp, listed
+                               # explicitly since these modules import it directly
     "piper-tts>=1.8",          # speak — see requirements.txt for the full note
     "faster-whisper>=1.0",     # listen — see requirements.txt for the full note
     "sounddevice>=0.5",        # speak/listen — see requirements.txt for the full note

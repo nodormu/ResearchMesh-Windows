@@ -244,7 +244,7 @@ the native package behind the `midi1` tool (via `mido[ports-rtmidi]` in requirem
 Wheels only go up to Python 3.12 as of writing. Without a C++ compiler on the box, pip's
 attempt to build it from source fails outright — and because `pip install -r requirements.txt`
 installs everything in one all-or-nothing batch, that one failure takes down the *entire*
-install, not just `midi1`. You'll see `speak`/`listen`/sound packages, `httpx`, etc. all
+install, not just `midi1`. You'll see `speak`/`listen`/sound packages, `httpx2`, etc. all
 silently fail to install too, with no obvious reason why, since they never even get a chance
 to run before pip bails out. Two ways to avoid this:
 - **Install the C++ build toolchain first** (see step 6 below for the exact commands), so
@@ -359,7 +359,7 @@ OR if you prefer the alternative post-git module
   dependency of `mido[ports-rtmidi]`) has no prebuilt wheel for Python 3.13/3.14 as of
   writing, pip tries to compile it from source, that fails without a compiler, and because
   `pip install -r requirements.txt` is all-or-nothing, **the entire install fails, not just
-  midi1** — you'll get none of the packages, including sound/`httpx`/everything else, with
+  midi1** — you'll get none of the packages, including sound/`httpx2`/everything else, with
   no obvious reason why. (`meson`/`ninja`, the actual build tools `python-rtmidi` uses, get
   pulled in automatically by pip during the build — you do NOT need to install those two
   yourself. The compiler and Windows SDK are the only pieces pip can't supply on its own.)
