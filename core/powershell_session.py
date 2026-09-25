@@ -56,6 +56,39 @@ pexpect/PowerShell-Core transport used for testing or also holds on real
 ConPTY (whose Ctrl+C delivery — `GenerateConsoleCtrlEvent` — is a
 different mechanism from Unix's tty-byte-to-SIGINT) is unverified.
 
+6. **An uncaught terminating error (idiomatic `-ErrorAction Stop`, or a bare
+   `throw`) in the user's own command aborts the REST OF THE TEMP FILE**,
+   including the trailer that computes the return code and emits the
+   sentinel — a real, reported bug: an ordinary, instant, fully-resolved
+   PowerShell error otherwise looks EXACTLY like a genuine hang from this
+   module's point of view (the sentinel just never appears), costing the
+   full `timeout` and a destructive force-kill+respawn for something that
+   was never actually stuck. Fixed with two layers, both needed since they
+   catch different failures: the user's `command` is wrapped in
+   `try { } catch { }` inside the temp file itself (absorbs a RUNTIME
+   terminating error, still runs the trailer afterward, still surfaces the
+   error text via `Write-Error`); a genuine PARSE error in the file (which
+   the inner wrapper can't reach, since the file never even executes in
+   that case) is caught by a SEPARATE, predefined `__RunStaged` function —
+   `param($Path) try { . $Path } catch { function prompt {''}; Write-Output
+   "<sentinel>:1" }` — established once per spawn/respawn (alongside the
+   `function prompt {''}` reset, same priming round trip) rather than typed
+   inline on every call. That "predefined function, short call site" shape
+   is itself load-bearing, not a style choice: an EARLIER version inlined
+   the whole `try { . 'path' } catch { ... }` text directly into the
+   live-typed line every call, which made that line long enough (~140
+   chars, vs. a bare `. 'path'` call's ~40) to routinely wrap past the pty's
+   80-column width — confirmed live, this corrupts PSReadLine's redraw echo
+   badly enough that `_clean()`/`_strip_echo()` can no longer recover the
+   real output at all. The fix keeps every call's live-typed line close to
+   its original length (`. __RunStaged '<path>'`) regardless of how long
+   `command` itself is, since only the FILE (unlimited length, no pty
+   involved) grows. Also confirmed live: dot-sourcing the FUNCTION CALL
+   itself (`. __RunStaged ...`, not a plain `__RunStaged ...` call) is what
+   makes this scope-safe — a plain call would run in `__RunStaged`'s own
+   new scope, trapping anything the nested `. $Path` defines instead of
+   leaking it to the top level the way a direct `. '<path>'` always did.
+
 **Genuinely unverified: the pywinpty/ConPTY transport itself.** Everything
 above was validated against a real `pwsh` via `pexpect` on Linux (same
 interpreter cross-platform), confirming the PowerShell-language findings —
@@ -157,6 +190,19 @@ _POLL_INTERVAL = 0.2
 _DSR_QUERY = "\x1b[6n"
 _DSR_REPLY = "\x1b[1;1R"
 
+# Fixed, non-random marker `__RunStaged`'s catch clause emits on a genuine
+# PARSE error (see the module docstring's Finding 6) — deliberately NOT
+# derived from the per-session `_sentinel`. `__RunStaged` is defined once
+# during priming (`_spawn()`), and its literal source text is itself typed
+# into the interactive session at that point — embedding the real
+# `_sentinel` there would mean that value gets echoed during PRIMING, not
+# just during real per-call use, recreating the exact leftover-priming-bytes
+# collision `_spawn()`'s own `priming_sentinel` already exists to avoid (see
+# its docstring comment). A fixed constant sidesteps this: it never varies,
+# so it can safely appear in the priming text without ever being mistaken
+# for that session's own real sentinel, whose pattern is checked separately.
+_PARSE_ERROR_MARKER = "__PSS_PARSE_ERROR__"
+
 # Strips ANSI/OSC escapes the same way core/output.strip_ansi does, plus CRLF
 # normalization — PSReadLine's syntax-highlighting redraw and the Windows
 # console's own CRLF line endings both need cleaning before a caller sees
@@ -228,12 +274,82 @@ class _Reader:
 
 
 def _sentinel_pattern() -> "re.Pattern[str]":
+    """Matches EITHER the normal `<sentinel>:<rc>` a completed script's own
+    trailer writes, OR the fixed `_PARSE_ERROR_MARKER` `__RunStaged`'s catch
+    clause writes on a parse error (no `:<rc>` suffix — there is no real
+    exit code to report in that case, see `_run()`'s handling of a match
+    with no captured group). Both are legitimate ways THIS call can end;
+    checking for both in one pattern keeps `_pump_until`'s call sites simple.
+    """
     assert _sentinel is not None
-    return re.compile(re.escape(_sentinel) + r":(-?\d+)")
+    return re.compile(
+        re.escape(_sentinel) + r":(-?\d+)" + r"|" + re.escape(_PARSE_ERROR_MARKER)
+    )
 
 
 def _clean(text: str) -> str:
     return _ANSI.sub("", text).replace("\r\n", "\n").replace("\r", "")
+
+
+def _answer_dsr(chunk: str) -> str:
+    """Reply to every DSR query (`_DSR_QUERY`) found in `chunk`, stripping
+    each one out as it's answered. Module-level (not nested inside
+    `_pump_until`) so `_drain_settle()` can share it — see that function's
+    own docstring for why a second caller needs it.
+    """
+    assert _shell is not None
+    while _DSR_QUERY in chunk:
+        try:
+            _shell.write(_DSR_REPLY)
+        except Exception as e:
+            # Best-effort — if the pty is already gone, the caller's own
+            # EOF/timeout handling downstream is what actually matters, not
+            # this reply landing. Logged rather than a bare `pass` for the
+            # same reason every other silent catch in this project family
+            # logs (see core/bash_session.py's own `_shutdown_sync`) rather
+            # than truly swallowing it.
+            print(f"[powershell_session] DSR reply write failed (ignored): {e}")
+        chunk = chunk.replace(_DSR_QUERY, "", 1)
+    return chunk
+
+
+def _drain_settle(quiet_period: float = 0.3, max_wait: float = 2.0) -> None:
+    """Block until at least `quiet_period` seconds pass with NO new data
+    arriving from the reader, or `max_wait` total seconds elapse — then
+    return with `_buffer` unchanged (the caller resets it).
+
+    Only used right after `_spawn()`'s priming step matches, before
+    resetting `_buffer` for the first real call. A single non-blocking
+    `_reader.get(0)` drain (used inline in `_pump_until` right after ANY
+    match, including this one) only catches whatever's ALREADY sitting in
+    the queue at that exact instant — it does not wait for a few more
+    milliseconds of trailing echo that simply hasn't arrived yet. Confirmed
+    live this gap is real, not theoretical: priming's own typed line grew
+    substantially once it started also defining `__RunStaged` (see
+    `_spawn()`), and a `_reader.get(0)`-only drain routinely left several
+    hundred bytes of trailing PSReadLine redraw echo still in flight,
+    silently prepended to the FIRST real call's `_buffer` once it began
+    accumulating fresh output — with `_PARSE_ERROR_MARKER`'s concatenation
+    trick (see `_spawn()`) already closing the specific false-match this
+    caused, but the underlying race (stale bytes bleeding across the
+    `_buffer = ""` boundary) was still worth closing directly rather than
+    relying on that one trick to keep masking it. `quiet_period`/`max_wait`
+    are generous relative to how little data this settles (a burst of
+    already-in-flight redraw bytes, not a long-running command) — this is
+    not on the hot path for slow commands, only once per spawn/respawn.
+    """
+    global _buffer
+    assert _reader is not None
+    deadline = time.monotonic() + max_wait
+    last_data_at = time.monotonic()
+    while time.monotonic() < deadline:
+        chunk = _reader.get(_POLL_INTERVAL)
+        if chunk:
+            _buffer += _answer_dsr(chunk)
+            last_data_at = time.monotonic()
+            continue
+        if time.monotonic() - last_data_at >= quiet_period:
+            return
 
 
 def _pump_until(deadline: float, pattern: "re.Pattern[str]") -> tuple[str, "re.Match[str] | None"]:
@@ -249,21 +365,6 @@ def _pump_until(deadline: float, pattern: "re.Pattern[str]") -> tuple[str, "re.M
     global _buffer
     assert _reader is not None
     assert _shell is not None
-
-    def _answer_dsr(chunk: str) -> str:
-        while _DSR_QUERY in chunk:
-            try:
-                _shell.write(_DSR_REPLY)
-            except Exception as e:
-                # Best-effort — if the pty is already gone, the caller's own
-                # EOF/timeout handling downstream is what actually matters,
-                # not this reply landing. Logged rather than a bare `pass`
-                # for the same reason every other silent catch in this
-                # project family logs (see core/bash_session.py's own
-                # `_shutdown_sync`) rather than truly swallowing it.
-                print(f"[powershell_session] DSR reply write failed (ignored): {e}")
-            chunk = chunk.replace(_DSR_QUERY, "", 1)
-        return chunk
 
     while True:
         m = pattern.search(_buffer)
@@ -295,7 +396,7 @@ def _pump_until(deadline: float, pattern: "re.Pattern[str]") -> tuple[str, "re.M
         _buffer += _answer_dsr(chunk)
 
 
-def _write_temp_script(command: str, trailer: str) -> str:
+def _write_temp_script(command: str, trailer: str, sentinel: str) -> str:
     """Write `command` + `trailer` to a fresh temp .ps1 file, return its path.
 
     Staging through a real file — not typing multi-line text into the live
@@ -317,14 +418,39 @@ def _write_temp_script(command: str, trailer: str) -> str:
     fallback the exit-code formula's `else` branch is supposed to produce
     when no native command actually ran in THIS call. Resetting it fresh at
     the start of every per-call script closes that leak.
+
+    `command` is wrapped in `try { } catch { }`, not just followed by the
+    trailer — see Finding 6 (module docstring) for why: an UNCAUGHT
+    terminating error (any idiomatic `-ErrorAction Stop`, or a bare `throw`)
+    aborts the REST OF THE FILE, including the trailer that computes the
+    return code and emits the sentinel. Without this wrapper, that ordinary,
+    common scripting pattern makes the sentinel never appear at all — the
+    caller then waits out the FULL timeout and gets a destructive
+    force-kill+respawn for what was, from PowerShell's own point of view, an
+    instant, ordinary, fully-resolved error. The catch block absorbs the
+    exception (surfacing it via `Write-Error` so it still reaches `output`)
+    and records that it fired in `$__caught_<sentinel>`, which the trailer's
+    return-code formula checks FIRST, before falling back to the existing
+    `$?`/`$LASTEXITCODE` formula for every case that was never about an
+    uncaught exception in the first place (a non-terminating cmdlet failure,
+    a native nonzero exit). Confirmed live this wrapper does not introduce a
+    new variable scope — `try`/`catch` are control-flow constructs in
+    PowerShell, not scope boundaries, so anything the command assigns still
+    persists in the caller's scope exactly as it did before this change.
     """
     fd, path = tempfile.mkstemp(prefix="rm_pwsh_session_", suffix=".ps1")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write("$LASTEXITCODE = $null\n")
+            f.write(f"$__caught_{sentinel} = $false\n")
+            f.write("try {\n")
             f.write(command)
             if not command.endswith("\n"):
                 f.write("\n")
+            f.write("} catch {\n")
+            f.write(f"$__caught_{sentinel} = $true\n")
+            f.write("Write-Error $_\n")
+            f.write("}\n")
             f.write(trailer)
     except Exception:
         try:
@@ -336,13 +462,16 @@ def _write_temp_script(command: str, trailer: str) -> str:
 
 
 def _trailer(sentinel: str) -> str:
-    """The lines appended after the user's own command, in the SAME temp
-    file — see the module docstring's Finding 3 for why same-file placement
-    is what gives this the same atomicity bash's brace-group trick has, and
-    Finding 4 for why the exit-code line isn't simply `$LASTEXITCODE`.
+    """The lines appended after the user's own command (itself now wrapped
+    in try/catch — see `_write_temp_script`), in the SAME temp file — see
+    the module docstring's Finding 3 for why same-file placement is what
+    gives this the same atomicity bash's brace-group trick has, Finding 4
+    for why the exit-code line isn't simply `$LASTEXITCODE`, and Finding 6
+    for why `$__caught_<sentinel>` is checked first.
     """
     return (
-        f"\n$__rc_{sentinel} = if (-not $?) {{ if ($LASTEXITCODE) {{ $LASTEXITCODE }} "
+        f"$__rc_{sentinel} = if ($__caught_{sentinel}) {{ 1 }} "
+        f"elseif (-not $?) {{ if ($LASTEXITCODE) {{ $LASTEXITCODE }} "
         f"else {{ 1 }} }} else {{ 0 }}\n"
         f"function prompt {{ '' }}\n"
         f'Write-Output "{sentinel}:$($__rc_{sentinel})"\n'
@@ -407,10 +536,42 @@ def _spawn() -> str | None:
     # not-yet-drained priming bytes satisfy a REGULAR command's later
     # search against that same pattern. A one-off probe, never searched
     # for again, makes that collision structurally impossible.
+    # Also defines `__RunStaged` here, alongside the prompt reset — the
+    # function every real call's live-typed line invokes (see `_run()` and
+    # the module docstring's Finding 6). Defined ONCE per spawn/respawn,
+    # not per call, since a function persists in session state exactly like
+    # a variable does.
+    #
+    # Its catch clause builds `_PARSE_ERROR_MARKER`'s text via PowerShell-
+    # side string CONCATENATION (`'__PSS_PARSE' + '_ERROR__'`), not as one
+    # literal string — deliberately. This whole `run_staged_def` line is
+    # itself TYPED into the interactive session during priming, so its raw
+    # source text is what a background reader thread queues up, and a slow
+    # trailing chunk of THAT echo can still be sitting unconsumed by the
+    # time this priming step's own match is found and `_buffer` resets (see
+    # the drain loop below). If the marker appeared as one contiguous
+    # literal in that source text, a later real call's very first
+    # `_sentinel_pattern()` search could match against those leftover
+    # priming bytes instead of anything the real command produced —
+    # confirmed live, this is a real failure mode, not theoretical: with
+    # the marker spelled out literally here, the FIRST real call after
+    # priming reliably returned a truncated slice of the priming echo
+    # itself as its "output". Splitting it across a concatenation means the
+    # complete, matchable string only ever exists in genuinely EXECUTED
+    # output (produced later, well after priming's own sentinel already
+    # matched and reset the buffer) — never in typed/echoed source.
     priming_sentinel = uuid.uuid4().hex
+    run_staged_def = (
+        "function global:__RunStaged { param($Path) try { . $Path } catch { "
+        "function prompt { '' }; Write-Output ('__PSS_PARSE' + '_ERROR__') } }"
+    )
+    assert "__PSS_PARSE" + "_ERROR__" == _PARSE_ERROR_MARKER
     try:
         _buffer = ""
-        _shell.write(f"function prompt {{ '' }}; Write-Output \"{priming_sentinel}:0\"")
+        _shell.write(
+            f"function prompt {{ '' }}; {run_staged_def}; "
+            f'Write-Output "{priming_sentinel}:0"'
+        )
         _shell.write("\r")
     except Exception as e:
         _shutdown_sync()
@@ -422,6 +583,7 @@ def _spawn() -> str | None:
     if outcome != "matched":
         _shutdown_sync()
         return "persistent PowerShell did not settle after priming in time"
+    _drain_settle()
     _buffer = ""
 
     return None
@@ -476,11 +638,31 @@ def _run(tool_input: dict) -> str:
     timeout = int(tool_input.get("timeout") or _DEFAULT_TIMEOUT)
 
     assert _sentinel is not None
-    script_path = _write_temp_script(command, _trailer(_sentinel))
+    script_path = _write_temp_script(command, _trailer(_sentinel), _sentinel)
     try:
         global _buffer
         _buffer = ""
-        line = f". '{script_path}'"
+        # Calling `__RunStaged` (defined once at priming time, see
+        # `_spawn()`) rather than typing `try { . 'path' } catch { ... }`
+        # inline here EVERY call — the inline form was the first attempt at
+        # fixing Finding 6's parse-error case, and it was WRONG: it made the
+        # live-typed line long enough (~140 chars, vs this form's ~15-char
+        # constant overhead over the bare path) to routinely wrap past the
+        # terminal's 80-column width, which corrupts PSReadLine's redraw
+        # echo beyond what `_clean()`/`_strip_echo()` can recover — confirmed
+        # live, reproduced the exact garbled-repeated-output failure this
+        # way, then confirmed the fix by keeping the call site short instead.
+        # `. __RunStaged '<path>'` — dot-sourcing the FUNCTION CALL itself,
+        # not just calling it plain — is load-bearing, not stylistic: a
+        # plain (non-dot-sourced) function call runs in ITS OWN new scope,
+        # which would trap anything the user's script defines inside that
+        # scope instead of the top-level session scope, breaking persistence
+        # entirely. Confirmed live that dot-sourcing the call preserves
+        # scope through the NESTED `. $Path` inside `__RunStaged`'s own body
+        # too — a variable set by the innermost staged file is visible at
+        # the top level afterward, same as calling `. '<path>'` directly
+        # always was.
+        line = f". __RunStaged '{script_path}'"
         try:
             assert _shell is not None
             _shell.write(line)
@@ -523,7 +705,13 @@ def _run(tool_input: dict) -> str:
         # plain characters ARE contiguous, and `_strip_echo`'s `rfind`
         # correctly lands on the one clean, complete final redraw.
         output = _strip_echo(_clean(_buffer[: match.start()]), line)
-        return_code = int(match.group(1))
+        # group(1) is the captured `<rc>` from the normal `<sentinel>:<rc>`
+        # alternative; it's None when the OTHER alternative (the fixed
+        # `_PARSE_ERROR_MARKER`, no captured digits) is what matched instead
+        # — a parse error in `command`, reported the same way a runtime
+        # error inside it already is: rc 1, whatever PowerShell itself
+        # already wrote about the error is in `output`.
+        return_code = int(match.group(1)) if match.group(1) is not None else 1
         return json.dumps(
             {
                 "output": clip(output, _MAX_OUTPUT) or "(no output)",

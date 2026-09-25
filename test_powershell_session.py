@@ -213,6 +213,32 @@ def main() -> int:
     check("variable did NOT survive the timeout/respawn", "VAR=[]" in r2.get("output", ""), str(r2))
     check("shell genuinely responsive after respawn", r2.get("return_code") == 0, str(r2))
 
+    print("\nan uncaught terminating error (-ErrorAction Stop) does NOT cost "
+          "a timeout/respawn, and earlier state survives it (Finding 6)")
+    _call(mod, {"command": "$beforeStopError = 'still-here'"})
+    r = _call(mod, {"command": "Get-Item C:/no/such/path -ErrorAction Stop"})
+    check("returns promptly, no timeout flag", "timed_out" not in r, str(r))
+    check("return_code is 1", r.get("return_code") == 1, str(r))
+    check("error text reached output", "Cannot find" in r.get("output", "") or "Get-Item" in r.get("output", ""), str(r))
+    r2 = _call(mod, {"command": 'Write-Output "VAR=[$beforeStopError]"'})
+    check("earlier state survived (no respawn happened)", "VAR=[still-here]" in r2.get("output", ""), str(r2))
+
+    print("\na bare `throw` is caught the same way as -ErrorAction Stop")
+    r = _call(mod, {"command": "throw 'deliberate test failure'"})
+    check("returns promptly, no timeout flag", "timed_out" not in r, str(r))
+    check("return_code is 1", r.get("return_code") == 1, str(r))
+    check("error text reached output", "deliberate test failure" in r.get("output", ""), str(r))
+
+    print("\na genuine PARSE error (invalid syntax) also returns promptly, "
+          "not via a timeout, and does not corrupt the session")
+    _call(mod, {"command": "$beforeParseError = 'also-still-here'"})
+    r = _call(mod, {"command": "this is { { { not valid powershell &&&"})
+    check("returns promptly, no timeout flag", "timed_out" not in r, str(r))
+    check("return_code is 1", r.get("return_code") == 1, str(r))
+    r2 = _call(mod, {"command": 'Write-Output "VAR=[$beforeParseError]"'})
+    check("earlier state survived the parse error", "VAR=[also-still-here]" in r2.get("output", ""), str(r2))
+    check("session still fully responsive after a parse error", r2.get("return_code") == 0, str(r2))
+
     print("\nrestart wipes state, self-heals on next use")
     _call(mod, {"command": "$restartProbe = 'before-restart'"})
     r = _call(mod, {"restart": True})
