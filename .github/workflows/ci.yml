@@ -105,6 +105,39 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone -- the commit-message
+          # scan below needs every commit, not just the tip, to be meaningful.
+          fetch-depth: 0
+      # Complements the tracked-file check below: neither `git grep` on
+      # tracked files nor gitleaks' default mode scans commit MESSAGE text at
+      # all (confirmed live, 2026-09-25, after a real key ended up in a
+      # commit message rather than a file and sailed through both unnoticed).
+      # This closes that gap directly. Explicit "exit 0" at the end is
+      # deliberate, not decorative: git grep exits 1 for "no match" (the
+      # clean/good result), and a pwsh step here fails if $LASTEXITCODE is
+      # non-zero at script end even without an explicit exit -- the exact
+      # bug already found and fixed in the sibling check below.
+      - name: No literal credentials in commit messages
+        shell: pwsh
+        run: |
+          $found = git log --all --format=%B | Select-String -Pattern 'sk-ant-(api03|admin01)-[A-Za-z0-9_-]{20,}' -Quiet
+          if ($found) {
+            Write-Output '::error::A commit MESSAGE contains what looks like a real Anthropic API key.'
+            exit 1
+          }
+          $found = git log --all --format=%B | Select-String -Pattern '(AKIA|ASIA)[A-Z0-9]{16}' -Quiet
+          if ($found) {
+            Write-Output '::error::A commit MESSAGE contains what looks like a real AWS access key.'
+            exit 1
+          }
+          $found = git log --all --format=%B | Select-String -Pattern 'gh[pousr]_[A-Za-z0-9]{20,}' -Quiet
+          if ($found) {
+            Write-Output '::error::A commit MESSAGE contains what looks like a real GitHub token.'
+            exit 1
+          }
+          Write-Output 'no committed credentials found in commit messages'
+          exit 0
       - name: No literal credentials in tracked files
         shell: pwsh
         run: |
