@@ -38,7 +38,10 @@ dependencies = [
     "send2trash>=1.8",
     "pyautogui>=0.9.54",
     "pillow>=10.0",
-    "httpx>=0.24",             # text_embeddings — already pulled in by anthropic
+    "httpx>=0.24",             # text_embeddings/vision_query — NOT pulled in by
+                               # anthropic anymore as of anthropic>=1 (its HTTP layer
+                               # moved to httpx2); an independent requirement now, see
+                               # requirements.txt for the full note
 ]
 
 # Must come after every key of [project] above: a table header ends the table
