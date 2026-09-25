@@ -91,7 +91,8 @@ rules; it only lists exemptions, each with its reason beside it. A run that is *
 means the finding is new: either something you just wrote, or a rule a newer ruff added
 (`select` is deliberately left at ruff's defaults, which do shift between versions —
 `BLE001`/`S110`/`PLW1510` only began appearing around 0.16). Triage it rather than assuming
-it's more of the same. Ruff itself is not a project dependency and nothing runs it for you.
+it's more of the same. Ruff is a project dependency (`requirements.txt`/`pyproject.toml`) as
+of an explicit user request; CI installs and runs it independent of that either way.
 
 **`python smoke_test.py` is the other gate**, and CI (`.github/workflows/ci.yml`) runs it plus
 `ruff` and `mypy` on every push and PR to `main`. It is not a test suite: it never exercises a

@@ -143,8 +143,8 @@ the REPL instead of by Claude.
   two *off*, each with its reason written next to it, so a clean run is the expected
   baseline and any finding you do see is genuinely new: your own code, or a rule a newer
   ruff added. (The rule selection is left at ruff's defaults, which do shift between
-  versions.) Ruff is **not** a dependency and nothing runs it for you — install it yourself
-  if you want it. There's no `[tool.black]` and no `.pylintrc`.
+  versions.) Ruff **is** a dependency (`requirements.txt`/`pyproject.toml`) as of an
+  explicit user request. There's no `[tool.black]` and no `.pylintrc`.
 - **Type checking: `mypy .` should pass too.** `pyproject.toml` has a `[tool.mypy]` section
   setting exactly one option (`ignore_missing_imports`, because the per-tool backing packages
   are lazily imported and legitimately absent from a `pip install .`-only venv — they're all

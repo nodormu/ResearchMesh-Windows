@@ -42,6 +42,8 @@ dependencies = [
                                # anthropic anymore as of anthropic>=1 (its HTTP layer
                                # moved to httpx2); an independent requirement now, see
                                # requirements.txt for the full note
+    "ruff>=0.16",              # linter — added back by explicit user request, see
+                               # requirements.txt for the full note
 ]
 
 # Must come after every key of [project] above: a table header ends the table
@@ -52,10 +54,11 @@ dependencies = [
 Homepage = "https://github.com/nodormu/ResearchMesh-Windows"
 Source = "https://github.com/nodormu/ResearchMesh-Windows"
 
-# Ruff is NOT a dependency of this project and nothing runs it automatically —
-# there is still no CI, no pre-commit hook, no test suite. This section exists
-# only so that `ruff check .`, if you happen to run it by hand, comes back clean
-# instead of returning ~39 findings that are all deliberate. The alternative was
+# Ruff IS a project dependency (added by explicit user request; it used to be
+# deliberately excluded — see requirements.txt). CI (.github/workflows/ci.yml)
+# already runs `ruff check .` on every push/PR, independent of this dependency-
+# list change. This section exists so that a clean run is the actual baseline
+# instead of ~39 findings that are all deliberate. The alternative was
 # a paragraph of prose telling each reader which findings to ignore, which
 # drifted every time the code was touched.
 #
