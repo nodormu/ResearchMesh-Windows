@@ -536,6 +536,160 @@ wrong. And always make prompt (a) above your literal first message in a new sess
 instead of guessing, and (per that prompt's own instructions) triggers it to re-verify and refresh
 whatever's changed since the last time it looked.
 
+### 10) interactive_run — log in without Claude ever seeing your passwords
+
+`interactive_run` can log you into things — sudo-equivalent prompts, ssh, whatever asks for a
+password — without your password, or your GPG vault passphrase, ever being seen by Claude. You
+need to set this up once (below). After that, whenever a command needs a credential, you get a
+list of the names you saved to pick from, so you never have to remember which one it is yourself
+either.
+
+<details>
+<summary><strong>Full <code>gopass</code> vault setup, walkthrough + reference charts (click to expand)</strong></summary>
+
+**One-time `gopass` setup — install first:**
+```powershell
+winget install Git.Git
+winget install GnuPG.Gpg4win
+winget install gopass.gopass
+```
+This is `gopass`'s own documented Windows setup, not something invented for this project — see
+the module docstring in `core/processes.py` for why `gopass` instead of the original `pass`
+(short version: real `pass` is a bash script with no native Windows build at all; `gopass` is a
+from-scratch Go reimplementation explicitly positioned as *"a drop-in replacement for pass"*,
+with a genuine native Windows binary and the same `show`/`ls` subcommands this tool needs).
+
+```
+SETUP SEQUENCE SETTING UP A VAULT FROM SCRATCH
+══════════════════════════════════════════════
+
+Step 1: gpg --full-generate-key
+  You type:   Name, Email, Passphrase
+  Purpose:    Creates your encryption key (a public/private key pair)
+
+Step 2: gpg --list-secret-keys
+  You type:   Nothing — just run it
+  Purpose:    Shows you the Key ID (long hex string) you'll need next
+
+Step 3: gopass setup
+  You type:   Follow the prompts — pick the key from Step 2 when asked
+              "Please select a private key for encrypting secrets"
+  Purpose:    Initializes your password store using that key
+
+Step 4: gopass insert <entry-name>
+  You type:   A name you choose, then the secret value to store
+  Purpose:    Encrypts and saves one password under that name
+
+Step 5: gopass show <entry-name>
+  You type:   Nothing — just the entry name
+  Purpose:    Decrypts and prints that password (Gpg4win's own pinentry
+              dialog pops up for your passphrase the first time;
+              gpg-agent caches it for a while after)
+```
+
+**EXPLANATION FOR SETTING UP A VAULT FROM SCRATCH AND ADDING YOUR GITHUB PERSONAL ACCESS TOKEN (PAT) TO IT AS AN EXAMPLE**
+
+Using a PAT specifically, not a password, because GitHub doesn't accept account
+passwords for git/API operations at all anymore — a PAT is what actually goes in that
+prompt. Generate one at github.com → Settings → Developer settings → Personal access
+tokens.
+```
+Thing            Where it comes from              What it's actually for
+─────────────────────────────────────────────────────────────────────────
+Name / Email     You type it when you run         The vault never reads this
+(= "User ID")    `gpg --full-generate-key`         — but YOU will. It's the
+                 to create your key                only human-readable label
+                                                    you'll see when running
+                                                    `gpg --list-keys` later.
+                                                    Pick something you'll
+                                                    recognize, not garbage —
+                                                    you're the one who has to
+                                                    remember it, not the
+                                                    software.
+
+Passphrase       You type it when you run         This passphrase allows
+                 `gpg --full-generate-key`,        you to get into your
+                 same command as above             vault.
+
+Key ID           GPG generates this on its        An ID number `gopass setup`
+(long hex        own, shown to you after           asks you to pick, to tell
+string)          you run `gpg --list-secret-       your (still-empty) vault
+                 keys`                             which key to use.
+
+Public key       Generated automatically           Locks up new passwords
+                 alongside the key, same           you save — used the
+                 command as above                  moment you run
+                                                    `gopass insert github`.
+
+Private key      Generated automatically           Unlocks passwords so you
+                 alongside the key, same           can read them — used the
+                 command as above                  moment you run
+                                                    `gopass show github`
+                                                    (once the passphrase has
+                                                    unlocked the key itself).
+
+─────────────────────────────────────────────────────────────────────────
+Your Actual      You type it when you run          THIS is your actual
+GitHub           `gopass insert github` — it       GitHub PAT — the real
+Personal         then asks you for it on its       credential git sends to
+Access Token     OWN separate line, AFTER you      GitHub over HTTPS. Lives
+(PAT)            run that command                  INSIDE the vault,
+                                                    encrypted. Retrieved
+                                                    with `gopass show github`.
+                                                    GitHub sees THIS, never
+                                                    the passphrase. NOT the
+                                                    same as, and unrelated
+                                                    to, the passphrase
+                                                    above. NOT your GitHub
+                                                    account password either
+                                                    — GitHub no longer
+                                                    accepts that for git/API
+                                                    use at all.
+```
+
+Once set up, a tool call looks like:
+```json
+{"expect": "Password for", "send_secret": "github"}
+```
+Note: git's own prompt text literally says "Password for ..." even though what
+actually belongs there is your PAT, not a password — that's git's wording, not
+this project's; the `expect` regex just has to match what git really prints.
+
+The model only ever sees the word `"github"` — never your real PAT, at any point.
+
+```
+BELOW IS HOW YOU BLOW THE WHOLE VAULT AWAY IF YOU WANT TO START OVER
+═════════════════════════════════════════════════════════════════
+gpgconf --kill gpg-agent
+Remove-Item -Recurse -Force "$env:APPDATA\gopass"
+```
+(`gopass`'s own store/config location on Windows — unlike `pass`'s fixed
+`~/.password-store`, run `gopass config` first if you're unsure where yours
+actually lives before deleting anything.)
+
+Here's the mechanism, as documented for the `send_secret` field:
+
+- The model only ever specifies the **name** of a credential (e.g. `github`) in its
+  tool call — never the value.
+- That name is resolved **locally**, on your machine, via `gopass show <name>` (which
+  decrypts a GPG-encrypted entry on disk — Gpg4win's own pinentry dialog handles the
+  passphrase prompt if the key isn't already cached).
+- The decrypted value is written directly into the waiting program's ConPTY input by
+  the local tool plumbing — it is substituted in *before* the interaction ever gets
+  turned into something the model reads.
+- The transcript that comes back to the model has it redacted, everywhere it would
+  otherwise appear, not just on the line it was sent on.
+
+So the flow is: **gopass vault → local process → the program's ConPTY input**, bypassing
+the model entirely for the secret itself. It only ever sees the *name* (not sensitive) and
+a masked transcript afterward. See `core/processes.py`'s own module docstring for the
+Windows-specific transport caveat that doesn't apply to the Linux/Mac originals: pywinpty
+opens a loopback socket to move ConPTY output around, which `secret: true`/`send_secret`
+protects the *returned transcript* from, not that local wire — read the full docstring
+before treating this as an equivalent guarantee to the other two forks.
+
+</details>
+
 ## Configuration
 
 Non-secret settings live in `config.toml`. Secrets stay in the environment — the app does
