@@ -6,8 +6,8 @@ tool means writing one module and adding it here, rather than editing the chat
 loop's declaration list and its routing chain separately.
 
 Each tool's third-party package is imported lazily, inside that module's
-`execute`, rather than at the top of the file — not because the package is
-optional to install (requirements.txt installs all of them unconditionally),
+`execute`, rather than at the top of the file — not because it's skippable
+at install time (requirements.txt installs all of them unconditionally),
 but so that if one were ever missing at runtime, only that one tool fails
 with an install hint instead of the whole client refusing to start.
 """
@@ -53,7 +53,7 @@ MODULES = [
     listen,       # local speech-to-text via faster-whisper, config-driven
     midi1,        # MIDI 1.0 device I/O via mido/python-rtmidi — device
                   # discovery, open/close/send/poll (poll carries real
-                  # per-message timestamps and an optional blocking wait),
+                  # per-message timestamps and a blocking wait when requested),
                   # every standard channel/System-Common/System-Real-Time
                   # message, generic SysEx, full .mid/.syx file read+write,
                   # and a large set of typed SysEx convenience messages

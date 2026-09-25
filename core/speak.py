@@ -35,7 +35,7 @@ result back with `sounddevice`/`soundfile` instead of `paplay` (which
 doesn't exist on Windows; PipeWire/PulseAudio sink names have no Windows
 equivalent either). `sink`, if set, is a `sounddevice` output device index
 or a substring of its name (see `python -m sounddevice` to list devices) —
-optional, since Windows already has a perfectly good default output device
+not required, since Windows already has a perfectly good default output device
 without any configuration.
 
 Requires:  pip install piper-tts sounddevice soundfile
@@ -76,7 +76,7 @@ TOOLS = [
                 "voice": {
                     "type": "string",
                     "description": (
-                        "Optional path to a different Piper .onnx voice "
+                        "Not required — a path to a different Piper .onnx voice "
                         "model for this call, overriding config.toml's "
                         "[speak].voice_model. Must have a matching "
                         "<path>.json sidecar file, same as the default."

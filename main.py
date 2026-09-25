@@ -108,9 +108,9 @@ def build_client(server: dict, name: str) -> MCPClient:
     - stdio (local subprocess the client launches itself):
         { name = "...", command = ["node", "/path/to/bin.js"], env = { ... } }
       `command` is the full argv — command[0] is the executable, the rest are
-      its arguments. `env` is optional: extra environment variables to hand
-      the subprocess (merged with a safe default set — PATH, HOME, etc. — by
-      the MCP SDK itself, so you don't need to repeat those).
+      its arguments. `env` may be omitted; when given, it's extra environment
+      variables to hand the subprocess (merged with a safe default set — PATH,
+      HOME, etc. — by the MCP SDK itself, so you don't need to repeat those).
 
     Paths are expected to arrive already expanded (`_connect_mcp_servers` runs
     `_expand_paths` first); calling this directly with a raw config entry will

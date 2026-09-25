@@ -565,7 +565,7 @@ enabled = true              # false skips every server; local tools still work
 #   stdio (a local server main.py launches itself, no separate process to start
 #   by hand — it talks JSON-RPC over the subprocess's stdin/stdout):
 #     command    full argv as a list, e.g. ["node", "C:/path/to/bin.js"]
-#     env        optional table of extra environment variables for it
+#     env        table of extra environment variables for it, if needed
 servers = [
   { name = "n8n",    url = "http://192.168.2.12:5678/mcp-server/http", token_env = "N8N_MCP_TOKEN" },
   { name = "alpaca", url = "http://192.168.2.12:8000/mcp" },
@@ -976,7 +976,7 @@ overrides it. And a `command = ["node", …]` entry in `config.toml` runs whatev
 
 </details>
 
-## Recommended local tools (optional — saves tokens)
+## Recommended local tools (not required — saves tokens)
 
 None of these are dependencies — nothing here breaks without them. They're suggested
 purely so Claude reaches for a fast, purpose-built local binary via `powershell` instead
@@ -1026,7 +1026,7 @@ winget install Kitware.CMake                 # cmake — build system generator
 winget install Ninja-build.Ninja             # ninja — fast build backend, pairs with cmake
 winget install Rustlang.Rustup                # rustup — official Rust toolchain installer, bootstrapper only
 rustup-init.exe -y                            # actually installs rustc/cargo — winget alone does NOT do this
-# Optional, heavier: a full GNU/Linux-style toolchain (real gcc/make/pacman) instead of clang/MSVC.
+# Not required, heavier: a full GNU/Linux-style toolchain (real gcc/make/pacman) instead of clang/MSVC.
 winget install MSYS2.MSYS2                   # base environment only — see MSYS2 setup steps below
 
 # --- System diagnostics ---------------------------------------------------------------
@@ -1080,7 +1080,7 @@ straight from PowerShell instead, using bash.exe's `-lc` flag. Run these in orde
 # 3) Verify
 & "C:\msys64\usr\bin\bash.exe" -lc "/ucrt64/bin/gcc.exe --version && /ucrt64/bin/mingw32-make.exe --version"
 
-# 4) (optional) put gcc/make on PATH for your user account, no admin needed — new PowerShell window
+# 4) (not required) put gcc/make on PATH for your user account, no admin needed — new PowerShell window
 #    required afterward for it to take effect
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\msys64\ucrt64\bin", [System.EnvironmentVariableTarget]::User)
 ```

@@ -38,8 +38,8 @@ Windows has no PipeWire/PulseAudio and no `parecord`/`timeout` — capture
 here goes through `sounddevice.rec(...)` instead, entirely in-process, with
 `soundfile` writing the result to a temp WAV. There is also no PipeWire-style
 requirement to name a source up front: `sounddevice` already has a sensible
-notion of a "default input device" that normally just works, so `device` is
-OPTIONAL here (unlike the Linux version, where it's mandatory) — set it only
+notion of a "default input device" that normally just works, so `device`
+does NOT NEED to be set here (unlike the Linux version, where it's mandatory) — set it only
 to pin a specific microphone (see `python -m sounddevice` to list devices,
 or pass a numeric index or a substring of a device's name).
 
@@ -86,7 +86,7 @@ TOOLS = [
                 "device": {
                     "type": "string",
                     "description": (
-                        "Optional sounddevice input device to override "
+                        "Not required — a sounddevice input device to override "
                         "[listen].device for this call — a numeric index "
                         "(as a string) or a substring of the device's "
                         "name. If omitted, the system default microphone "
@@ -166,8 +166,8 @@ def _run(tool_input: dict) -> str:
             }
         )
 
-    # 2. Resolve the input device. Unlike the Linux version, this is
-    # OPTIONAL — sounddevice's own default input device is used if none is
+    # 2. Resolve the input device. Unlike the Linux version, this does NOT
+    # NEED to be set — sounddevice's own default input device is used if none is
     # requested, and only reported as not_configured if that default
     # doesn't actually exist (no microphone at all) or an explicitly
     # requested device doesn't match anything real.

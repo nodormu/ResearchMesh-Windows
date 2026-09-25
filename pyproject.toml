@@ -79,9 +79,6 @@ ignore = [
     # must not be able to fail at all. Narrowing these has already caused one
     # real bug — see "Shutdown is isolated per tool" in CLAUDE.md.
     "BLE001",
-    # `Optional[X]` rather than `X | None`, 6× in mcp_client.py. Cosmetic; the
-    # churn isn't worth it. New code is free to use either.
-    "UP045",
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -98,8 +98,8 @@ class CliApp:
                 # so this happens regardless of whether `/voice` (auto_speak)
                 # is on or off; that flag only affects whether the REPLY
                 # gets spoken, never whether dictated input gets sent.
-                # Optional `/listen <N>` overrides [listen]'s configured
-                # duration for just this one call.
+                # `/listen <N>`, if `<N>` is given, overrides [listen]'s
+                # configured duration for just this one call.
                 if text.startswith("/listen"):
                     arg = text[len("/listen"):].strip()
                     tool_input = {}

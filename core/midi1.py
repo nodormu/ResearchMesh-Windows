@@ -116,8 +116,9 @@ Actions:
                    raw name byte rather than being guessed at.
   - run_clock    : drive a real, precisely-paced 24-pulses-per-quarter-note
                    MIDI Clock stream on an open output handle for a fixed
-                   duration, with an optional Start/Continue sent once
-                   before it begins and an optional Stop once it ends.
+                   duration, with a Start/Continue sent once before it
+                   begins if requested, and a Stop once it ends unless
+                   turned off.
                    Exists because 'send' fires exactly one message per
                    tool call — fine for one-off messages, but hopeless for
                    anything needing real sub-20ms-at-typical-tempo pacing:
@@ -149,8 +150,8 @@ decodes an incoming sysex message generically, confirmed live
 (str(mido.Message('sysex', data=(1,2,3))) -> "sysex data=(1,2,3) time=0").
 
 File-I/O note (.mid/.syx read AND write support): 'read_midi_file' takes a
-'path' (absolute path to a .mid/.midi or .syx file) and an optional
-'max_messages' (default 100, caps how many message strings are returned per
+'path' (absolute path to a .mid/.midi or .syx file) and 'max_messages' (not
+required, default 100, caps how many message strings are returned per
 track/file so a huge file can't flood the response — set 0 to get only
 metadata/counts with zero message bodies). For .mid/.midi: uses
 mido.MidiFile(path), returns file type (0/1/2), ticks_per_beat,
@@ -215,8 +216,8 @@ TOOLS = [
             "'seconds' 0-59, 'frames' 0-29, and REQUIRED 'frame_rate' (one "
             "of '24'/'25'/'30drop'/'30nondrop' — no default, since guessing "
             "wrong here changes what the position means downstream; "
-            "optional 'device_id' 0-127 defaults to 127/all-devices, which "
-            "IS the spec's own stated default), or a typed 'mmc' message "
+            "'device_id' 0-127, not required, defaults to 127/all-devices, "
+            "which IS the spec's own stated default), or a typed 'mmc' message "
             "(MIDI Machine Control — transport control, also built as a "
             "validated sysex payload under the hood): needs a required "
             "'command', one of 'stop'/'play'/'deferred_play'/"
@@ -226,7 +227,7 @@ TOOLS = [
             "'locate' (needs 'hours'/'minutes'/'seconds'/'frames'/"
             "'frame_rate' same as 'mtc_full' above, PLUS 'subframes' "
             "0-99 — moves the receiving device's playhead to that exact "
-            "position). Optional 'device_id' 0-127 defaults to 127/all-"
+            "position). 'device_id' 0-127, not required, defaults to 127/all-"
             "devices, same convention as 'mtc_full'. NOTE: Shuttle and "
             "Write commands are deliberately NOT supported (Shuttle's "
             "speed-byte encoding was under-specified in available sources, "
@@ -244,19 +245,19 @@ TOOLS = [
             "'resume'/'timed_go'/'load'/'set'/'fire'/'all_off'/'restore'/"
             "'reset'/'go_off' — NOTE this is a shared field name with "
             "'mmc' above but a DIFFERENT set of valid values for 'msc'). "
-            "'go'/'stop'/'resume'/'go_off' take optional 'q_number'/"
-            "'q_list'/'q_path' (ASCII digit-and-dot strings, e.g. "
-            "'q_list' requires 'q_number' too, 'q_path' requires "
-            "'q_list' too). 'load' requires 'q_number' (same optional "
-            "'q_list'/'q_path' rules). 'timed_go' requires 'hours'/"
+            "'go'/'stop'/'resume'/'go_off' may include 'q_number'/"
+            "'q_list'/'q_path' (none required; ASCII digit-and-dot strings, "
+            "e.g. 'q_list' requires 'q_number' too, 'q_path' requires "
+            "'q_list' too). 'load' requires 'q_number' (same 'q_list'/"
+            "'q_path' rules, neither required). 'timed_go' requires 'hours'/"
             "'minutes'/'seconds'/'frames'/'fractional_frames'/'frame_rate' "
             "(same meaning as 'mtc_full', plus 'fractional_frames' 0-99) "
-            "and takes the same optional q_number/q_list/q_path as 'go'. "
+            "and may include the same q_number/q_list/q_path as 'go'. "
             "'set' requires 'control_number' and 'control_value' (each "
-            "0-16383) and optionally the SAME 6 time fields as 'timed_go' "
+            "0-16383) and may include the SAME 6 time fields as 'timed_go' "
             "— given ALL together or not at all. 'fire' requires "
             "'macro_number' (0-127). 'all_off'/'restore'/'reset' need no "
-            "extra fields. Optional 'device_id' 0-127 defaults to 127/all-"
+            "extra fields. 'device_id' 0-127, not required, defaults to 127/all-"
             "devices, same convention as 'mtc_full'/'mmc'. NOTE: the "
             "extended 15-command MSC 'Sound Commands' set (clock/cue-list-"
             "path management) is deliberately NOT supported — use the "
@@ -270,7 +271,7 @@ TOOLS = [
             "lost between calls while the port stays open (continuously "
             "captured into a bounded 10,000-message buffer regardless of "
             "poll timing). By default returns instantly with whatever's "
-            "already buffered; pass optional 'timeout_seconds' (0-60, "
+            "already buffered; set 'timeout_seconds' (0-60, not required, "
             "default 0) to instead BLOCK until either a message arrives "
             "or that many seconds elapse, waking up early rather than "
             "always waiting the full duration. 'close' closes a "
@@ -289,7 +290,7 @@ TOOLS = [
             "extension) — this is whole-file CREATE only, not an in-place "
             "edit of an existing file. Refuses to overwrite an existing "
             "file unless 'overwrite' is explicitly true. For .mid: "
-            "optional 'midi_file_type' (0/1/2, default 1) and "
+            "'midi_file_type' (0/1/2, default 1, not required) and "
             "'ticks_per_beat' (default 480), plus required 'tracks' — an "
             "array of {'messages': [...]} objects. Each message reuses the "
             "same type+fields shape as 'send' (note_on, control_change, "
@@ -323,13 +324,13 @@ TOOLS = [
             "(20-300), 'duration_seconds' (0 exclusive to 120 inclusive — "
             "capped short deliberately, since unlike 'poll' this is "
             "ACTIVELY driving hardware I/O the whole time, not just "
-            "idly waiting; call again for a longer run). Optional "
+            "idly waiting; call again for a longer run). Not required: "
             "'transport' — 'start' (default, sent once before the clock "
             "stream begins), 'continue' (resume rather than restart-from-"
             "beginning, on gear that distinguishes the two), or 'none' "
             "(send bare Clock only, no transport message at all — for "
             "tempo-following without triggering play/already-started "
-            "gear). Optional 'stop_at_end' (boolean, default true) — "
+            "gear). Also not required: 'stop_at_end' (boolean, default true) — "
             "sends a 'stop' message once the clock stream finishes; set "
             "false to leave the receiving device running/armed on its "
             "own after this call returns. The call blocks for "
@@ -374,7 +375,7 @@ TOOLS = [
                 "timeout_seconds": {
                     "type": "number",
                     "description": (
-                        "Optional for 'poll'. 0-60, default 0 (instant, "
+                        "Not required for 'poll'. 0-60, default 0 (instant, "
                         "non-blocking — returns immediately with whatever "
                         "is already buffered). A value above 0 instead "
                         "BLOCKS until either a message arrives or this "
@@ -406,7 +407,7 @@ TOOLS = [
                     "type": "string",
                     "enum": ["start", "continue", "none"],
                     "description": (
-                        "Optional for 'run_clock', default 'start'. "
+                        "Not required for 'run_clock', default 'start'. "
                         "Which (if any) MIDI Real-Time transport message "
                         "to send once, immediately before the Clock "
                         "stream begins: 'start' (from the beginning), "
@@ -419,7 +420,7 @@ TOOLS = [
                 "stop_at_end": {
                     "type": "boolean",
                     "description": (
-                        "Optional for 'run_clock', default true. Sends a "
+                        "Not required for 'run_clock', default true. Sends a "
                         "'stop' message once the Clock stream finishes. "
                         "Set false to leave the receiving device running/"
                         "armed on its own after this call returns."
@@ -608,7 +609,7 @@ TOOLS = [
                         "device_id": {
                             "type": "integer",
                             "description": (
-                                "0-127. Optional for 'mtc_full'/'mmc', "
+                                "0-127. Not required for 'mtc_full'/'mmc', "
                                 "defaults to 127 (all devices) — the spec's "
                                 "own default."
                             ),
@@ -689,7 +690,7 @@ TOOLS = [
                             "type": "string",
                             "description": (
                                 "'msc' only — ASCII digit/'.' string, e.g. "
-                                "'235.6'. Required for 'load', optional "
+                                "'235.6'. Required for 'load', not required "
                                 "for 'go'/'stop'/'resume'/'timed_go'/"
                                 "'go_off'."
                             ),
@@ -872,7 +873,7 @@ _MAX_CLOCK_DURATION = 120.0
 # than the caller's own requested `duration_seconds` the outer
 # asyncio.wait_for wrapper allows before it gives up — must comfortably
 # exceed the time `_run_clock`'s own internal clock loop needs to finish
-# and send its optional trailing Stop message.
+# and send its trailing Stop message, when one is due.
 _CLOCK_TIMEOUT_MARGIN = 5.0
 
 
@@ -1327,7 +1328,7 @@ def _encode_standard_time_code(
     OR a 4-flag status byte "0 e v d n xxx" (i=1: estimated/invalid/
     video_field_1/no_time_code flags, top 3 bits reserved=000).
 
-    The common case (a plain time code, optionally with subframes) only
+    The common case (a plain time code, with subframes if needed) only
     needs the first 5 positional args -- every rarer per-bit flag
     defaults to its "normal"/off state, same "friendly fields with
     sensible defaults, not a raw bitfield" pattern used elsewhere (e.g.
@@ -1532,7 +1533,7 @@ def _encode_msc_ascii_field(name: str, value: str) -> tuple:
 
 def _encode_msc_cue_data(q_number, q_list, q_path) -> tuple:
     """Shared by the 5 MSC General Category commands that carry
-    optional trailing cue-targeting data (GO, STOP, RESUME, TIMED_GO,
+    trailing cue-targeting data, when present (GO, STOP, RESUME, TIMED_GO,
     GO_OFF) — factored out once rather than repeated 5 times. Per spec:
     Q_list requires Q_number to also be present, Q_path requires Q_list.
     A single 0x00 delimiter separates each field that's actually present;
@@ -2618,7 +2619,7 @@ def _build_message(message: dict) -> "mido.Message":
             #
             # `fields` = a list of dicts, each `{"name": ...,
             # "hours"/"minutes"/"seconds"/"frames"/"frame_rate": ...,
-            # [optional subframes/flags]}` — every field currently in
+            # [subframes/flags, if present]}` — every field currently in
             # _INFO_FIELD_NAMES uses the IDENTICAL 5-byte Standard Time
             # Code format (see _encode_standard_time_code above), so one
             # encoder covers all of them; no per-field-type branching
@@ -4204,7 +4205,7 @@ def _build_quarter_frame_sequence(message: dict) -> list:
     the Full Message format. Some real devices/receivers only parse
     Quarter Frame (not every Full Message), so this exists as an
     alternative encoding of identical information, NOT a different
-    feature. Optional 'direction' ("forward", default, or "reverse")
+    feature. 'direction' ("forward", default, or "reverse", not required)
     controls message ORDER only (7->0 instead of 0->7) — the per-message
     nibble VALUES are identical either way, only the sequence flips (the
     spec explicitly notes tape running backwards sends the same 8
