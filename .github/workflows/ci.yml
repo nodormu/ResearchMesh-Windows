@@ -159,6 +159,18 @@ jobs:
           }
 
           Write-Output 'no committed credentials found'
+          # Explicit, deliberate exit 0. Without this, the step's exit code
+          # falls through to whatever $LASTEXITCODE the last `git grep` above
+          # left behind -- and `git grep` exits 1 for "no match", which is
+          # the CLEAN result here, not a failure. GitHub's pwsh steps fail
+          # the step if $LASTEXITCODE is non-zero at script end even when
+          # nothing called `exit` on purpose, so a fully clean tree was
+          # failing this job on every run. Confirmed live: this job showed
+          # red on every push since at least 2026-09-08, always with only a
+          # generic "Process completed with exit code 1" annotation and none
+          # of this script's own ::error:: messages -- proof none of the
+          # four real checks above were ever actually tripping.
+          exit 0
 
   # General-purpose secret scanner, complementing (not replacing) the
   # targeted regex checks above. Those check THIS app's own token_env/
