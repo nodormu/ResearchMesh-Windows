@@ -201,13 +201,8 @@ def main() -> int:
     check("next call has no leaked prompt text either", "STOMPED" not in r2.get("output", ""), str(r2))
     check("next call's real output intact", "after-stomp" in r2.get("output", ""), str(r2))
 
-    print("\ntimeout -> always force-kill + full respawn (Ctrl-C does not "
-          "propagate into a dot-sourced script's execution — confirmed "
-          "live, decisively, not a timing quirk: see the module's own "
-          "_handle_timeout() docstring for the full finding). No 'plain "
-          "recovery keeps state' case exists here, unlike bash_session/"
-          "zsh_session — every timeout is honestly reported as a full "
-          "state reset.")
+    print("\ntimeout -> always force-kill + full respawn (Ctrl-C doesn't "
+          "reach a dot-sourced script; see _handle_timeout()'s docstring)")
     _call(mod, {"command": "$timeoutProbe = 'should-not-survive'"})
     r = _call(mod, {"command": "Start-Sleep -Seconds 30", "timeout": 3})
     check("reports timed_out", r.get("timed_out") is True, str(r))

@@ -11,112 +11,57 @@ Windows pseudo-console (ConPTY) via `pywinpty`, the same library and the same
 parameter, so a background thread feeds a queue that this module polls
 against a deadline).
 
-This is NOT a straight port of core/bash_session.py's mechanism. PowerShell's
-interactive line editor (PSReadLine) behaves differently from bash/zsh in ways
-that needed live research against a real `pwsh` process before writing this
-(see the project's own dev notes for the full research trail) — three
-findings shape everything below:
+Not a port of core/bash_session.py's mechanism — PowerShell's line editor
+(PSReadLine) differs enough to need its own design:
 
-1. **PSReadLine issues a live cursor-position query at startup and will
-   corrupt the whole session if nothing answers it.** A bare `pwsh` on a pty
-   sends `\\x1b[6n` (ANSI Device Status Report) and effectively waits for a
-   real terminal's `\\x1b[row;colR` reply; confirmed live that with no
-   answer, every subsequent command comes back mangled (phantom escape bytes
-   reinterpreted as PowerShell source, spurious ParserErrors) rather than
-   just looking ugly. Unlike zsh's `unsetopt zle` (a one-line fix sent once
-   at spawn), there is no known way to make PSReadLine simply not ask.
-   `Remove-Module PSReadLine` sent as the very first line does not work
-   either — the child is already blocked on its own pending query before
-   that line can be read at all. The fix that DOES work, confirmed live: a
-   read loop that watches every incoming chunk for `\\x1b[6n` and immediately
-   writes back a synthetic `\\x1b[1;1R` — the actual row/col numbers don't
-   appear to matter, PSReadLine just needs *some* well-formed answer. This
-   has to be a permanent, always-on part of every read (`_pump_until()`
-   below), not a spawn-time-only fix — PSReadLine re-issues the query
-   routinely, not just once at startup.
+1. **PSReadLine fires an ANSI cursor-position query (`\\x1b[6n`) at startup
+   and periodically after, and stalls without a reply**, corrupting later
+   output (phantom escape bytes read back as source, spurious ParserErrors).
+   There's no zsh-`unsetopt zle`-style one-liner to suppress the query.
+   Fix: `_pump_until()` answers every `\\x1b[6n` it sees with a synthetic
+   `\\x1b[1;1R`, continuously, for the life of the session — the row/col
+   values don't matter, only that some reply arrives.
 
-2. **Raw multi-line pty input does not work the way it does for bash/zsh.** A
-   bare `\\n` sent to an interactive PSReadLine session is silently DROPPED —
-   not inserted as a newline, not treated as Enter — confirmed live: three
-   `\\n`-joined statements collapsed into one malformed concatenated line
-   with a resulting ParserError. Only a literal `\\r` submits a line. This
-   rules out bash_session's whole approach of sending a multi-line compound
-   construct as one `sendline()` payload.
+2. **A bare `\\n` sent to an interactive PSReadLine session is silently
+   dropped**, not inserted and not treated as Enter — only `\\r` submits a
+   line. This rules out sending a multi-line construct as one payload the
+   way bash_session does.
 
-3. **The fix for (2) also answers the scoping question.** Every command is
-   staged into a temp `.ps1` file (own real newlines — normal PowerShell
-   parsing, no pty-typing quirks apply to the file's own content at all), a
-   reset/exit-code-capture trailer is appended to the END of that SAME file,
-   and exactly one short line is ever typed into the live session:
-   `. '<path>'`. Dot-sourcing (leading `. `, not `&`) was confirmed live to
-   execute in the CALLER's own scope, not a child scope — a variable, a
-   `Set-Location`, and a function defined inside a dot-sourced file were all
-   independently confirmed to persist into the interactive session
-   afterward. Because the reset lines are the last lines of that same file,
-   they always run immediately after the user's real command and before the
-   host can call `prompt()` again — the same atomicity guarantee bash's
-   brace-group trick gives, arrived at completely differently. Confirmed
-   live that PowerShell's `prompt` function IS the exact analog of bash's
-   PROMPT_COMMAND / zsh's `precmd` (the host calls it before every new
-   top-level read, including after a script that redefines `prompt` itself —
-   the same "worst-case stomp" scenario bash/zsh needed to handle), so
-   resetting it to blank in the trailer closes the same class of prompt-leak
-   bug the POSIX forks fixed, just via a different hook name.
+3. **Fix for (2) also solves scoping**: each command is staged into a temp
+   `.ps1` file (ordinary file, real newlines, no pty quirks), a reset/exit-
+   code trailer is appended to the same file, and exactly one line is typed
+   live: `. '<path>'`. Dot-sourcing runs in the caller's own scope (a
+   variable, `Set-Location`, and a function defined inside all persist
+   afterward), and since the trailer is the file's last lines it always
+   runs before the host calls `prompt()` again. `prompt` is PowerShell's
+   analog of bash's PROMPT_COMMAND / zsh's `precmd` (invoked before every
+   top-level read, even after a script redefines it) — resetting it in the
+   trailer closes the same prompt-leak class the POSIX forks fixed.
 
-Exit-code capture needs its own formula, not a direct `$?`/`$LASTEXITCODE`
-port: `$LASTEXITCODE` is set ONLY by native executables and is STICKY (a
-later successful cmdlet does not reset it — confirmed live: a cmdlet
-succeeding right after a native `exit 7` still reports `$LASTEXITCODE = 7`
-even though `$? = True`). The correct idiom, validated end-to-end against a
-real multi-statement script:
+Exit-code capture needs its own formula: `$LASTEXITCODE` is set only by
+native executables and is sticky (a later successful cmdlet does not reset
+it). Idiom used here, only consulting `$LASTEXITCODE` when `$?` says the
+last thing failed:
 
     $rc = if (-not $?) { if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 } } else { 0 }
 
-— only consult `$LASTEXITCODE` when `$?` itself says the last thing failed,
-which sidesteps the stickiness trap since a genuinely successful command
-always has `$? = True` regardless of what a prior native command's sticky
-`$LASTEXITCODE` still says.
+Ctrl-C (`\\x03`) does not interrupt anything running inside the dot-sourced
+staging path — a `Start-Sleep`/busy-loop under it just runs to completion
+regardless of the signal. (A bare, top-level typed command still interrupts
+normally; that's just not the path any real command here takes.) So
+`_handle_timeout()` skips Ctrl-C and force-kills + respawns on every
+timeout; `state_reset` is therefore always `true`, unlike bash_session/
+zsh_session's plain-recovery case. Whether this is specific to the
+pexpect/PowerShell-Core transport used for testing or also holds on real
+ConPTY (whose Ctrl+C delivery — `GenerateConsoleCtrlEvent` — is a
+different mechanism from Unix's tty-byte-to-SIGINT) is unverified.
 
-Ctrl-C (`\\x03`) does NOT interrupt anything running via the dot-sourced
-staging mechanism above — confirmed live, decisively, not a timing quirk:
-sent against a running `Start-Sleep -Seconds 90` inside a dot-sourced
-`.ps1`, with a generous 100s window to respond, the session answered at
-t=90.2s — the FULL natural sleep duration, meaning Ctrl-C had zero effect
-and the session just waited the whole thing out. A tight busy-loop
-(`while ($true) { Start-Sleep -Milliseconds 50 }`, giving PowerShell's
-engine many chances to notice a pending interrupt between iterations)
-showed the identical non-response — this is not about one cmdlet's polling
-behaviour, Ctrl-C simply does not propagate into a dot-sourced script's
-execution context at all under this transport. (A BARE, top-level TYPED
-command — not dot-sourced — interrupts via Ctrl-C fast and cleanly, ~1s;
-that finding is still true and unaffected by this, but it is not the path
-any real command in this module actually takes.) Given that, `_handle_
-timeout()` skips Ctrl-C entirely and goes straight to a force-kill + full
-respawn on every timeout — trying Ctrl-C first would either silently wait
-out however long the stuck command still had left (defeating the point of
-a responsive timeout) or, if time-boxed short, escalate anyway with the
-Ctrl-C attempt contributing nothing but wasted latency. `state_reset` is
-therefore always `true` here — there is no "plain recovery, state
-survives" case this module can honestly claim, unlike
-core/bash_session.py/core/zsh_session.py. **Unverified whether this is
-specific to this Linux/pexpect/PowerShell-Core research transport or would
-also hold on real Windows/ConPTY** — Windows' actual Ctrl+C delivery
-(`GenerateConsoleCtrlEvent`, a real console event) is architecturally
-different from Unix SIGINT-via-tty-byte-translation, so this is worth
-re-checking on real hardware rather than assumed to carry over either way.
-
-**Genuinely unverified — no Windows machine to test this module on yet.**
-Everything above was validated against a real `pwsh` process via `pexpect`
-on Linux (PowerShell 7 is the same interpreter on both platforms), which
-gives real confidence in the PowerShell-LANGUAGE-level findings (the prompt
-function, the scoping/dot-sourcing behaviour, the exit-code formula). It
-does NOT validate the actual transport this module uses in production:
-`pywinpty`/ConPTY is a Windows-only wheel and cannot be exercised on Linux
-at all. In particular, real ConPTY may already answer the `\\x1b[6n` query
-transparently via the Windows console subsystem before this module's own
-read loop ever sees it — the DSR-answering logic below is kept regardless
-(harmless if ConPTY already handles it, load-bearing if it doesn't), but
-this specific question needs a real Windows run to settle either way.
+**Genuinely unverified: the pywinpty/ConPTY transport itself.** Everything
+above was validated against a real `pwsh` via `pexpect` on Linux (same
+interpreter cross-platform), confirming the PowerShell-language findings —
+not the transport, since `pywinpty` is a Windows-only wheel. Real ConPTY
+may already answer the DSR query itself; the answering logic here is kept
+regardless (harmless if so, load-bearing if not).
 
 Not a replacement for `powershell`: use that for one-off commands, this for
 anything that needs state (cd, variables, functions, imported modules) to
@@ -323,20 +268,13 @@ def _pump_until(deadline: float, pattern: "re.Pattern[str]") -> tuple[str, "re.M
     while True:
         m = pattern.search(_buffer)
         if m:
-            # A background thread feeds `_reader`'s queue independently of
-            # this loop's own pace — confirmed live this is a REAL bug, not
-            # theoretical: the pty can deliver several chunks in a fast
-            # burst, the FIRST of which already satisfies `pattern`, while
-            # LATER chunks from that same burst are already sitting in the
-            # queue, read but not yet drained. Returning immediately here
-            # would leave them there for the NEXT call's `_pump_until` to
-            # drain instead — surfacing as this command's own trailing
-            # bytes (redraw noise, its own sentinel, even) contaminating
-            # the START of the NEXT command's captured output, since that
-            # next call always begins from `_buffer = ""`. A zero-wait
-            # drain pass here empties the queue of anything already
-            # available RIGHT NOW before control returns, so the next
-            # command's fresh start is genuinely fresh.
+            # The background reader thread can deliver a fast burst of
+            # chunks, the first of which already satisfies `pattern` while
+            # later ones from the same burst are still queued, unread.
+            # Returning immediately would leave those for the NEXT call's
+            # `_pump_until` to drain instead, contaminating the start of
+            # the next command's output (which always begins from
+            # `_buffer = ""`). Drain anything already available now first.
             while True:
                 extra = _reader.get(0)
                 if not extra:
@@ -446,57 +384,29 @@ def _spawn() -> str | None:
     _shell = proc
     _reader = _Reader(proc)
 
-    # Prime the session: wait for the very first prompt to appear, answering
-    # DSR queries along the way (they start firing before anything is even
-    # sent — confirmed live, PSReadLine queries cursor position at startup
-    # unprompted). Also send our own `function prompt { '' }` reset once here
-    # so a stray banner/first-prompt render never leaks into command #1's
-    # captured output, mirroring what core/bash_session.py's `_spawn()` does
-    # with its own priming round trip.
-    # No `$` anchor — deliberately. PSReadLine's terminal mode-set escape
-    # (DECCKM enable, `\x1b[?1h`) can arrive AFTER the visible "> " prompt
-    # text rather than before it (confirmed live: reproducible, not always
-    # the same order — the very first prompt of a session usually has it
-    # first, but not guaranteed to). An anchored `r"> $"` then never
-    # matches at all, since the buffer no longer truly ENDS with "> " once
-    # that trailing escape shows up — confirmed live this caused a real,
-    # reproducible hang/timeout during the escalated-respawn path
-    # specifically (a freshly spawned replacement session's own initial
-    # prompt got this trailing-order variant). A bare `"> "` search finds
-    # it regardless of what harmless escape noise follows.
+    # Prime the session: wait for the first prompt, answering DSR queries
+    # along the way, then send our own `function prompt { '' }` reset so a
+    # stray banner never leaks into command #1's output (mirrors
+    # core/bash_session.py's own priming round trip).
+    #
+    # No `$` anchor on the prompt pattern — deliberately. PSReadLine's
+    # terminal mode-set escape (`\x1b[?1h`) can arrive AFTER the visible
+    # "> " prompt text rather than before it, which breaks an anchored
+    # `r"> $"` (the buffer no longer truly ends with "> "). A bare `"> "`
+    # search matches regardless of what harmless escape noise follows.
     deadline = time.monotonic() + _DEFAULT_TIMEOUT
     outcome, _ = _pump_until(deadline, re.compile(r"> "))
     if outcome != "matched":
         _shutdown_sync()
         return "persistent PowerShell did not reach an initial prompt in time"
 
-    # The reset+sentinel is sent as ONE round trip, matched against its OWN
+    # Reset+sentinel sent as one round trip, matched against its OWN
     # one-off, throwaway sentinel — deliberately NOT `_sentinel_pattern()`
-    # (the shared, session-wide sentinel every REGULAR command also
-    # searches for). This went through two wrong fixes before landing here,
-    # both confirmed live:
-    #   - originally waited on `r"^$"` (MULTILINE), which matches almost
-    #     immediately against any buffer containing so much as one blank
-    #     line — long before the priming line's own echo/redraw had
-    #     actually finished arriving, so its leftover tail surfaced at the
-    #     FRONT of command #1's captured output (literal
-    #     `function prompt { '' }` text prepended to the first real
-    #     response).
-    #   - switching to `r"> $"` (a real prompt) was also wrong, for a more
-    #     basic reason: once `function prompt { '' }` takes effect the
-    #     prompt IS blank, so there is no `"> "` text ever left to match.
-    #   - switching to `_sentinel_pattern()` (the shared per-session
-    #     sentinel) fixed both of those, but reintroduced a subtler version
-    #     of the SAME class of bug: because that sentinel value is reused
-    #     for EVERY regular command for the rest of this session, any
-    #     leftover priming-step bytes that hadn't fully drained yet could
-    #     satisfy a REGULAR command's own later search against the exact
-    #     same pattern — confirmed live, reproducibly: the first real
-    #     command after spawn intermittently captured the PRIMING step's
-    #     own echo+sentinel instead of its own. A one-off probe sentinel,
-    #     used ONLY here and never searched for again, makes that
-    #     collision structurally impossible rather than a timing race to
-    #     keep chasing.
+    # (the shared, session-wide sentinel every regular command also
+    # searches for). Reusing the shared sentinel here would let leftover,
+    # not-yet-drained priming bytes satisfy a REGULAR command's later
+    # search against that same pattern. A one-off probe, never searched
+    # for again, makes that collision structurally impossible.
     priming_sentinel = uuid.uuid4().hex
     try:
         _buffer = ""
@@ -631,22 +541,15 @@ def _strip_echo(text: str, sent_line: str) -> str:
     """Remove PSReadLine's own echoed/redrawn rendering of the line we typed
     (the `. '<path>'` dot-source invocation) from the front of the captured
     output, leaving just the real command output. PSReadLine echoes input
-    back (confirmed live, same class of behavior core/bash_session.py's own
-    zsh support already documents for zsh's non-ZLE reader) — since we know
-    exactly what we sent, the first occurrence of that exact text is cut
-    along with everything before/through it.
+    back, same class of behavior core/bash_session.py's zsh support already
+    documents for zsh's non-ZLE reader.
     """
     # `rfind`, not `find`: PSReadLine's syntax-highlighting redraw re-emits
-    # the buffer from scratch on every character it processes, so the raw
-    # stream contains many OVERLAPPING, progressively-longer PREFIXES of
-    # `sent_line` (each one a partial redraw), interspersed with cursor-
-    # repositioning escapes — confirmed live via this exact bug: the first
-    # occurrence is often only the first few characters, not the complete
-    # line, so cutting there left most of the redraw noise still in
-    # `output`. The LAST occurrence is the one clean, complete copy —
-    # PSReadLine's own final redraw immediately before the line is
-    # submitted — and everything genuinely new (the real command output)
-    # only ever appears after it.
+    # the buffer on every character processed, so the raw stream contains
+    # many overlapping, progressively-longer prefixes of `sent_line`, not
+    # one clean copy. The LAST occurrence is the final, complete redraw
+    # right before submission — everything genuinely new only appears
+    # after it.
     idx = text.rfind(sent_line)
     if idx == -1:
         return text
@@ -657,48 +560,27 @@ def _handle_timeout(script_path: str) -> dict:
     """A command blew past its timeout. Force-kill the session and respawn
     fresh — ALWAYS, unconditionally. No Ctrl-C attempt first.
 
-    core/bash_session.py/core/zsh_session.py both try a plain Ctrl-C first,
-    since on a real pty a blocking command with no handler of its own
-    (`sleep`, a stuck loop) dies to it immediately and cleanly, and only a
-    raw-mode program that installs its own handler needs the harder
-    escalation path. This module does NOT do that, on purpose, because that
-    whole premise does not hold here: **confirmed live, decisively, that
-    Ctrl-C (`\\x03`) does not propagate as a stop request into ANYTHING
-    executing inside a dot-sourced script under this transport, at all** —
-    not a timing quirk, not specific to one cmdlet. Sending it against a
-    running `Start-Sleep -Seconds 90` inside a dot-sourced `.ps1` and
-    waiting a generous 100s produced a response at t=90.2s — the FULL
-    natural sleep duration, meaning Ctrl-C had zero effect and the session
-    simply waited the whole thing out. A tight busy-loop
-    (`while ($true) { Start-Sleep -Milliseconds 50 }`, giving PowerShell's
-    engine many chances to notice a pending interrupt between iterations)
-    showed the identical non-response. This is a real gap in the ORIGINAL
-    live research behind this module (which tested Ctrl-C against a bare,
-    top-level TYPED command — genuinely fast and clean there, ~1s) that
-    only surfaced once every command started running via dot-sourcing
-    (Finding 3 in the module docstring) instead — the two execution paths
-    behave completely differently, and this module's real commands ALWAYS
-    take the dot-sourced path.
+    core/bash_session.py/core/zsh_session.py try a plain Ctrl-C first,
+    since on a real pty a blocking command with no handler of its own dies
+    to it cleanly, and only a raw-mode program needs the harder escalation
+    path. That premise doesn't hold here: Ctrl-C (`\\x03`) does not
+    propagate into anything executing inside the dot-sourced staging path
+    (a `Start-Sleep`/busy-loop under it just runs to completion regardless).
+    A bare, top-level typed command still interrupts normally — that's just
+    not the path any real command here takes, since every command is
+    dot-sourced (see the module docstring).
 
-    Given that, attempting Ctrl-C first would only ever do one of two
-    things: silently wait out however long the stuck command still had
-    left (defeating the entire point of a responsive timeout, and
-    reporting a misleading `recovered: true, not force_killed` for
-    something that was never actually interrupted), or — if bounded by a
-    short enough grace period instead — escalate anyway, making the
-    Ctrl-C attempt pure wasted latency with no behavioural upside either
-    way. So:
-    skip it, and go straight to what actually works. `state_reset: true`
-    is reported unconditionally, honestly, since a stuck command's cd/
-    variables/functions genuinely do not survive this path — there is no
-    "plain recovery keeps state" case to claim here, unlike the POSIX
-    forks. **Unverified whether this Ctrl-C non-propagation is specific to
-    this Linux/pexpect/PowerShell-Core research transport or would also
-    hold on real Windows/ConPTY** — Windows' actual Ctrl+C delivery
-    (`GenerateConsoleCtrlEvent`, a real console event) is architecturally
-    different from Unix SIGINT-via-tty-byte-translation, so this is
-    exactly the kind of thing worth re-checking on real hardware rather
-    than assumed to carry over either way.
+    Attempting Ctrl-C first would therefore either silently wait out the
+    stuck command (defeating the point of a responsive timeout, while
+    misreporting `recovered: true, not force_killed`) or, if time-boxed
+    short, escalate anyway with the attempt contributing nothing. So this
+    skips straight to force-kill + respawn. `state_reset: true` always,
+    honestly — there is no "plain recovery keeps state" case here, unlike
+    the POSIX forks. Whether the Ctrl-C non-propagation is specific to the
+    pexpect/PowerShell-Core transport used for testing or also holds on
+    real ConPTY (a different signal-delivery mechanism —
+    `GenerateConsoleCtrlEvent` vs. Unix's tty-byte-to-SIGINT) is
+    unverified.
     """
     assert _shell is not None
     partial = _clean(_buffer)
