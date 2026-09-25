@@ -3,7 +3,13 @@
 #   pip install -r requirements.txt
 #   playwright install chromium    # one-time: downloads the headless browser (pip does NOT)
 
-anthropic>=0.51.0        # keep current — the 2026 web_search/web_fetch schemas need a recent SDK
+anthropic>=1,<2          # upgraded from 0.116.0 -> 1.8.0 (2026); no upper bound left it drifting
+                         # silently past the 1.0.0 breaking-change boundary (httpx2, removed
+                         # temperature/top_p/top_k from create(), client-side compaction_control
+                         # removed) -- none of that affects this codebase (grepped clean), but
+                         # pin explicitly so a fresh install matches what's actually been
+                         # verified. Re-verify (ruff/mypy/smoke_test.py/test_powershell_session.py
+                         # + a live call) before raising the ceiling to <3 whenever 2.0 ships.
 mcp[cli]>=2.0,<3         # MCP client + Streamable HTTP transport
 # The floor is 2.0, not a preference: mcp 2.0 is a breaking major and this code
 # now uses the new API on both sides — `Server(on_list_tools=…, on_call_tool=…)`
