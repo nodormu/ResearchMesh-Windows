@@ -93,6 +93,11 @@ ruff>=0.16               # linter, `pyproject.toml`'s `[tool.ruff.lint]` tunes i
                          # was: don't force a linter on someone who just wants to run the
                          # app) -- added back by explicit user request. `ruff check .`
                          # should come back clean; see CLAUDE.md/README.md.
+mypy>=2.0                # type checker, `pyproject.toml`'s `[tool.mypy]` tunes it for
+                         # this repo. Same reasoning as ruff above: it's an actual used
+                         # dependency of this project (CI's third gate), so it belongs
+                         # in the real dependency list, not CI-only. `mypy .` should
+                         # come back clean; see CLAUDE.md/README.md.
 mido[ports-rtmidi]>=1.3  # `midi1` — MIDI 1.0 device I/O (core/midi1.py), ported
                          # byte-identical from the Linux client — the only OS-specific
                          # code is one illustrative comment, since `mido`/`python-rtmidi`

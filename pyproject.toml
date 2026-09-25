@@ -48,6 +48,10 @@ dependencies = [
     "mido[ports-rtmidi]>=1.3", # midi1 — see requirements.txt for the full note
     "ruff>=0.16",              # linter — added back by explicit user request, see
                                # requirements.txt for the full note
+    "mypy>=2.0",               # type checker — used by this project (CI's third gate),
+                               # so it belongs here on the same reasoning as ruff above:
+                               # a real dependency of the project, not a CI-only extra.
+                               # See requirements.txt for the full note.
 ]
 
 # Must come after every key of [project] above: a table header ends the table
