@@ -107,7 +107,7 @@ the REPL instead of by Claude.
     apply the same way to this one.
   - **AppLocker** (or Windows Defender Application Control) restricts which
     executables/scripts the account may run at all, if you want to go further.
-- It's your API key: one request can fan out into many tool calls (capped at 75 per turn).
+- It's your API key: one request can fan out into many tool calls (capped at 200 per turn).
 - `powershell` forgets everything between calls — `cd`, `$env:` changes, activated venvs.
   Chain with `;` in one call, or use `python`, which keeps state.
 - Ask for files by absolute path. If Claude offers a download link instead, tell it you need

@@ -152,7 +152,7 @@ core.chat"`) are what `smoke_test.py` automates.
 
 Two rules about this codebase that a linter will fight you on, both learned the hard way:
 
-- **Blanket `except` is the architecture, not an oversight** (`BLE001`, 59 sites as of
+- **Blanket `except` is the architecture, not an oversight** (`BLE001`, 77 sites as of
   this writing — re-run `ruff check . --select BLE001 --statistics` rather than
   trusting this number, it grows with every new tool). Every
   local tool must catch anything and return an error string rather than crash the chat loop
