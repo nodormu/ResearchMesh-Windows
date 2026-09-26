@@ -75,6 +75,14 @@ Source = "https://github.com/nodormu/ResearchMesh-Windows"
 # appearing around 0.16), so a new release may surface new findings here — that
 # is the intended behaviour: you get told about the new rule, and the exemptions
 # below still hold.
+[tool.ruff]
+# scripts/ is gitignored (machine-local convenience tooling assuming sibling
+# repo clones that only exist on this dev box -- see its own .gitignore entry)
+# but still a real directory `ruff check .` would otherwise see and lint. A
+# fresh clone never has this directory at all, so real CI never lints it --
+# excluding it here keeps a local run matching what CI actually checks.
+exclude = ["scripts"]
+
 [tool.ruff.lint]
 ignore = [
     # Blanket `except Exception`/`except BaseException` is the architecture, not
@@ -105,6 +113,10 @@ ignore = [
 # this is a floor, not a straitjacket. Annotating a function opts it in, which
 # is the right direction of travel for new code.
 [tool.mypy]
+# Same reasoning as [tool.ruff]'s own exclude above -- scripts/ is real on
+# this dev box but gitignored/never present in a fresh clone, so real CI
+# never type-checks it either.
+exclude = "^scripts/"
 # The per-tool backing packages (duckdb, playwright, pyautogui, jupyter_client,
 # pywinpty, ruamel, tomlkit, jsonpath_ng, send2trash, piper, faster_whisper,
 # sounddevice, soundfile, mido) are imported lazily inside the tool that needs
