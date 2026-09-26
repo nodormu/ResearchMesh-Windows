@@ -1072,6 +1072,7 @@ core/
   listen.py                      local speech-to-text via faster-whisper
   midi1.py                       MIDI 1.0 device I/O via mido/python-rtmidi
   output.py                      shared output trimming + image results
+  process_reaper.py              exit-time safety net: kills real leftover child processes
   cli.py                         prompt_toolkit REPL
 ```
 
