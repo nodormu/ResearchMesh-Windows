@@ -238,7 +238,7 @@ the REPL instead of by Claude.
 - enable Python install manager (windowed) pywmanager.exe # ditto
 - enable Python install manager (windowed) pyw.exe # ditto
 
-**⚠️ Before you get to step 6's `pip install`, read this if you want `midi1` to work:**
+**⚠️ Before you get to step 6's `pip install`, read this — skipping it can fail the whole install, not just `midi1`:**
 Python 3.14 (what you just installed) has no prebuilt PyPI wheel yet for `python-rtmidi`,
 the native package behind the `midi1` tool (via `mido[ports-rtmidi]` in requirements.txt).
 Wheels only go up to Python 3.12 as of writing. Without a C++ compiler on the box, pip's
@@ -354,8 +354,8 @@ OR if you prefer the alternative post-git module
 - type: `git clone -h` # to see all the git clone options if you did a full install of git on your windows box, not covered in this repo
 - type: `git clone https://github.com/nodormu/ResearchMesh-Windows`
 - type: `cd ResearchMesh-Windows`
-- **If you want `midi1` (MIDI 1.0 device I/O) to actually work, install the C++ build
-  toolchain BEFORE running `pip install` below** — otherwise `python-rtmidi` (a native
+- **Install the C++ build toolchain BEFORE running `pip install` below — required for
+  `midi1` (MIDI 1.0 device I/O) and for the install as a whole** — otherwise `python-rtmidi` (a native
   dependency of `mido[ports-rtmidi]`) has no prebuilt wheel for Python 3.13/3.14 as of
   writing, pip tries to compile it from source, that fails without a compiler, and because
   `pip install -r requirements.txt` is all-or-nothing, **the entire install fails, not just
@@ -1133,12 +1133,12 @@ overrides it. And a `command = ["node", …]` entry in `config.toml` runs whatev
 
 </details>
 
-## Recommended local tools (not required — saves tokens)
+## Recommended local tools — install on every machine (saves tokens)
 
-None of these are dependencies — nothing here breaks without them. They're suggested
-purely so Claude reaches for a fast, purpose-built local binary via `powershell` instead
-of burning tokens re-implementing the same job in `python`, or reading whole files through
-the file editor just to search them. Install whichever are useful to you; skip the rest.
+The app starts without these, but Claude works faster and cheaper with them: it reaches
+for a fast, purpose-built local binary via `powershell` instead of burning tokens
+re-implementing the same job in `python`, or reading whole files through the file editor
+just to search them. Install all of them.
 
 ```powershell
 # --- Search, text & structured data -----------------------------------------------
@@ -1183,13 +1183,16 @@ winget install Kitware.CMake                 # cmake — build system generator
 winget install Ninja-build.Ninja             # ninja — fast build backend, pairs with cmake
 winget install Rustlang.Rustup                # rustup — official Rust toolchain installer, bootstrapper only
 rustup-init.exe -y                            # actually installs rustc/cargo — winget alone does NOT do this
-# Not required, heavier: a full GNU/Linux-style toolchain (real gcc/make/pacman) instead of clang/MSVC.
+# Alternative to clang/MSVC, heavier: a full GNU/Linux-style toolchain (real gcc/make/pacman) —
+# only needed if you choose gcc over MSVC.
 winget install MSYS2.MSYS2                   # base environment only — see MSYS2 setup steps below
 
 # --- System diagnostics ---------------------------------------------------------------
-# Microsoft.Sysinternals.Suite's winget manifest currently points at a hash that no longer
-# matches the file at Microsoft's own "always latest" download URL, so `winget install`
-# fails with "Installer hash does not match" — a stale-manifest problem, not a bad download.
+# As of 2026-09-10, Microsoft.Sysinternals.Suite's winget manifest pointed at a hash that no
+# longer matched the file at Microsoft's own "always latest" download URL, so `winget install`
+# failed with "Installer hash does not match" — a stale-manifest problem, not a bad download.
+# Try `winget install Microsoft.Sysinternals.Suite` first; the manifest may be fixed since.
+# If it still fails:
 # Rather than suggesting --ignore-security-hash, grab it directly from the same official
 # URL winget itself uses (Sysinternals ships as a plain ZIP, no installer, so this is just
 # as legitimate as letting winget do it):
@@ -1237,7 +1240,7 @@ straight from PowerShell instead, using bash.exe's `-lc` flag. Run these in orde
 # 3) Verify
 & "C:\msys64\usr\bin\bash.exe" -lc "/ucrt64/bin/gcc.exe --version && /ucrt64/bin/mingw32-make.exe --version"
 
-# 4) (not required) put gcc/make on PATH for your user account, no admin needed — new PowerShell window
+# 4) (only needed to run gcc/make from any PowerShell window) put gcc/make on PATH for your user account, no admin needed — new PowerShell window
 #    required afterward for it to take effect
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\msys64\ucrt64\bin", [System.EnvironmentVariableTarget]::User)
 ```

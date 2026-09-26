@@ -106,11 +106,15 @@ mido[ports-rtmidi]>=1.3  # `midi1` — MIDI 1.0 device I/O (core/midi1.py), port
                          # `[ports-rtmidi]` extra pulls in `python-rtmidi`, mido's actual
                          # port-I/O backend — plain `mido` alone can build/parse messages
                          # and read/write .mid files but can't open a real port.
-                         # python-rtmidi ships prebuilt wheels for Windows, so this
-                         # normally needs no compiler. Import is guarded (try/except at
-                         # module load, checked once in the dispatcher): missing this
-                         # only disables `midi1`, same "declares itself, returns an
-                         # install hint" contract as every other tool in this section.
+                         # python-rtmidi's Windows wheels stop at Python 3.12 (PyPI,
+                         # v1.5.8, checked 2026-09-26), so on 3.13/3.14 pip compiles it
+                         # from source and NEEDS the C++ build toolchain first (README
+                         # step 6) — without it, this line fails the ENTIRE
+                         # `pip install -r`, not just midi1. At runtime the import is
+                         # guarded (try/except at module load, checked once in the
+                         # dispatcher): a missing package only disables `midi1`, same
+                         # "declares itself, returns an install hint" contract as every
+                         # other tool in this section.
 
 # `memory` needs nothing beyond the standard library (core/memory.py).
 
