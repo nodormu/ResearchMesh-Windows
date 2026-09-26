@@ -1057,6 +1057,8 @@ core/
   local_tools.py                 registry of every locally-executed tool
   tools.py                       MCP <-> Anthropic bridge
   claude_learned_schemas.py      file editor, web_search, web_fetch
+  powershell.py                  PowerShell commands, fresh process each call
+  powershell_session.py          persistent PowerShell — cd/$env:/functions survive calls
   memory.py                      /memories store, persists across sessions
   computer.py                    screenshots + mouse/keyboard
   browser.py                     Playwright DOM surfing
