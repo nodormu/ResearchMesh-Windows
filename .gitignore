@@ -33,3 +33,10 @@ memories/
 # A `command = ["node", ...]` MCP server entry in config.toml may point at a
 # checkout that lives here. Nothing in this project installs it.
 node_modules/
+
+# Machine-local convenience scripts (e.g. a real-pwsh syntax validator for
+# this fork's own embedded PowerShell command strings). Not part of the
+# shipped project — a fresh clone has none of the context these assume
+# (this dev box's own sibling-repo layout), so shipping them tracked would
+# just be inert/confusing for anyone else.
+scripts/
