@@ -228,11 +228,12 @@ TOOLS = [
             "'frame_rate' same as 'mtc_full' above, PLUS 'subframes' "
             "0-99 — moves the receiving device's playhead to that exact "
             "position). 'device_id' 0-127, not required, defaults to 127/all-"
-            "devices, same convention as 'mtc_full'. NOTE: Shuttle and "
-            "Write commands are deliberately NOT supported (Shuttle's "
-            "speed-byte encoding was under-specified in available sources, "
-            "Write is a niche multitrack-recorder feature) — use the "
-            "generic 'sysex' action directly if either is ever needed. "
+            "devices, same convention as 'mtc_full'. NOTE: the 'command' "
+            "enum also accepts the later RP-013 extensions, including "
+            "'shuttle'/'variable_play'/'search' (need 'speed') and the "
+            "Information Field commands 'read'/'write'/'masked_write'/"
+            "'update' — see the 'command' field's own enum for the full "
+            "list; use the generic 'sysex' action for anything not in it. "
             "There is also a typed 'msc' message (MIDI Show Control — "
             "stage/theatrical equipment control, also a validated sysex "
             "payload under the hood): needs 'command_format' (one of "
@@ -1954,20 +1955,15 @@ def _build_message(message: dict) -> "mido.Message":
         # (also above) to encode each field's actual 5-byte data.
         # 'procedure' and 'event' both use _encode_nested_mmc_command
         # (also above) for embedding other mmc commands inside their
-        # own payload. 'read'/'write'/'update' all currently only
-        # accept the 15 field names already in _INFO_FIELD_NAMES; a
-        # device's reply to 'read'/'update' is NOT yet decodable by
-        # this tool (see the not-yet-built 'mmc_response' note below).
-        # NOT IMPLEMENTED (deliberately, still):
-        # Masked Write (0x41) — deliberately deferred: it only operates
-        # on "Standard Track Bitmap" style Information Fields (a
-        # different, variable-length format from the Standard Time Code
-        # fields registered so far), none of which are registered yet.
-        # A new 'mmc_response' message type, to actually decode a
-        # device's replies to read/write/update (today `poll` only
-        # shows raw undecoded sysex bytes for any response). The
-        # remaining ~50+ Information Field names beyond the 15 already
-        # registered.
+        # own payload. 'read'/'update' also accept the Standard Track
+        # Bitmap fields (_TRACK_BITMAP_INFO_FIELDS); 'write' accepts
+        # only the Standard Time Code fields. 'masked_write' (0x41,
+        # built) accepts only _MASK_WRITEABLE_INFO_FIELDS. A device's
+        # replies are decoded by the separate 'decode_mmc_response'
+        # action, not here.
+        # NOT IMPLEMENTED: Information Field names beyond those
+        # registered in _INFO_FIELD_NAMES — add one to that registry
+        # when a real device needs it.
         # Command Error Reset (0x0C) IS included — cheap to include, one
         # more dict entry, no reason to leave it out just because Wikipedia's
         # table happened to omit it while somascape's didn't contradict it.
@@ -3578,8 +3574,8 @@ def _build_message(message: dict) -> "mido.Message":
         # the smaller Real-Time subset of the fuller Non-Real-Time MTC
         # Cueing Set-Up message family (which also has Delete-variant
         # commands and extra Special sub-types not present here; NOT
-        # implemented — see the "Explicitly deferred" notes elsewhere in
-        # this project's memory). Wire format:
+        # implemented — build it only if a real device needs it). Wire
+        # format:
         #   F0 7F <device_id> 05 <sub-id#2> sl sm <additional info> F7
         # `sl sm` = a 14-bit Event Number, LSB then MSB (spec's own words:
         # "sl is the 7 LS bits, and sm is the 7 MS bits") — same LSB-first
@@ -4097,11 +4093,11 @@ def _build_rpn_or_nrpn_sequence(message: dict, *, registered: bool) -> list:
     Increment/Decrement (CC96/97) are DELIBERATELY NOT implemented — the
     primary spec names these controllers but never defines what their
     value byte actually means (Table III just lists "Data increment"/
-    "Data decrement" with no further detail), the same genuinely-
-    underspecified situation that already got MMC Shuttle deferred
-    elsewhere in this file. Use raw 'control_change' directly (controller
-    96 or 97) if a specific device's increment/decrement behavior is
-    already known.
+    "Data decrement" with no further detail), the same kind of spec
+    gap that held back MMC Shuttle until the RP-013 pages defining its
+    speed encoding turned up (Shuttle is built now). Use raw
+    'control_change' directly (controller 96 or 97) if a specific
+    device's increment/decrement behavior is already known.
     """
     channel = message.get("channel", 0)
     time = message.get("time", 0)
