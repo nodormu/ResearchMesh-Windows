@@ -5,6 +5,7 @@ name: CI
 # so CI checks the wiring, not the behaviour: does everything import, is the
 # tool registry well-formed, do the docs still agree with the code, and does
 # the MCP server complete a handshake. See smoke_test.py for the reasoning.
+# The test_*.py scripts and test_model_compat_live.py are local tools, not run in CI.
 #
 # No secrets are used. `smoke_test.py` sets a placeholder ANTHROPIC_API_KEY,
 # which is enough to start mcp_server.py and list its tools without ever

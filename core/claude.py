@@ -4,11 +4,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from anthropic import Anthropic
+from anthropic import Anthropic, BadRequestError
 from anthropic.types import Message
 from anthropic.types.beta import BetaMessage
-
-from core.computer import BETA_FLAG as COMPUTER_BETA
 
 # core/claude.py -> parent is core/, parent.parent is the repo root — same
 # resolution main.py/core/vision.py/core/speak.py use for their own config
@@ -217,23 +215,93 @@ def refresh_claude_models(
     return fresh_models
 
 
-# Betas sent on every request. The computer tool's `computer_20251124` schema is
-# beta-gated, and local_tools declares it on every request, so the header has to
-# be unconditional — omitting it 400s the whole request, not just computer use.
-# The beta Messages endpoint is a superset of the stable one, so nothing else
-# changes shape.
-BETAS = [COMPUTER_BETA]
+# Betas sent on every request. Empty as of the migration to
+# `computer_toolset_20260801` (see core/computer.py) — that toolset ships as a
+# stable, non-beta feature, unlike the older `computer_20251124` single-tool
+# schema this project used to declare, which needed the
+# `computer-use-2025-11-24` header unconditionally. Still posting to
+# `client.beta.messages.create` rather than reverting to the plain endpoint:
+# the beta Messages endpoint is a superset of the stable one (nothing changes
+# shape by staying on it with an empty `betas` list), and staying put here
+# keeps this migration scoped to the tool schema itself rather than also
+# touching the request-endpoint choice in the same change.
+BETAS: list[str] = []
 
 # The beta endpoint returns BetaMessage, which is NOT a subclass of Message, so
 # the response-vs-raw-content checks below must accept both. Testing only
 # `Message` would silently stuff the response object into `content`.
 _RESPONSE_TYPES = (Message, BetaMessage)
 
+# Anthropic's own fixed wording for "this model can't use one of the tool
+# types you declared" — confirmed live, byte-identical, across every model/
+# tool pairing this project has hit so far (Claude Opus 5.5 +
+# `computer_20251124`, Claude Haiku 4.5 + `computer_toolset_20260801`, ...).
+# Captures the comma-separated type list between the fixed phrase and the
+# following period; the response always continues with a "Did you mean one of
+# ..." suggestion list that this deliberately does NOT try to parse — that
+# list is what IS supported, not what to strip, and the whole point of the
+# retry loop below is to discover incompatibility empirically rather than
+# hand-maintain either list.
+_UNSUPPORTED_TOOL_TYPES_RE = re.compile(r"does not support tool types: ([^.]+)\.")
+
+# Bounds the retry-after-stripping loop in `chat()` below. Every real case
+# seen so far resolves in one retry (one BadRequestError names every
+# offending type in a single message, not one at a time) — this only guards
+# against a hypothetical model/API change that reports them one at a time,
+# so it never turns into a silent infinite loop chewing through the whole
+# tools array one entry at a time on some unrelated persistent failure.
+_MAX_UNSUPPORTED_TOOL_RETRIES = 5
+
 
 class Claude:
+    """Thin Anthropic SDK wrapper.
+
+    Posts to `client.beta.messages.create` — a deliberate holdover from when
+    the local `computer` tool needed a beta header (see BETAS above, now
+    empty). Kept rather than reverted to the plain endpoint because the beta
+    endpoint is a strict superset; top-level `cache_control` works on both, so
+    prompt caching is unaffected either way.
+
+    **Per-model tool-compatibility handling.** Not every Anthropic-defined
+    tool type works on every model — confirmed live: Claude Haiku 4.5 flatly
+    rejects `computer_toolset_20260801` (a real, permanent model limitation,
+    not a schema bug — Haiku doesn't support the older `computer_20251124`
+    either; `computer_20250124` is accepted but deliberately not declared).
+    Declaring an unsupported tool type fails the WHOLE request, not just the
+    incompatible tool, so a `/model swap` to an incompatible model would
+    otherwise 400 on every single turn until swapped back — including turns
+    that never touch the offending tool at all.
+
+    `_unsupported_by_model` remembers what has been discovered incompatible,
+    per model name, for the life of this process (reset only by restarting —
+    `/model swap` itself never clears it, so swapping back to a
+    previously-bad model doesn't need rediscovery). `chat()` proactively
+    filters against it before every request, and reactively grows it by
+    parsing a live "does not support tool types: ..." 400 the first time a
+    given model/tool pairing is actually tried — no hand-maintained
+    compatibility table to fall out of date, since it adapts to whatever the
+    real API says, for any current or future tool.
+    """
+
     def __init__(self, model: str):
         self.client = Anthropic()
         self.model = model
+        self._unsupported_by_model: dict[str, set[str]] = {}
+
+    def _filter_unsupported(self, tools: list[dict] | None) -> list[dict] | None:
+        """Drop any tool already known to be unsupported by `self.model`.
+
+        Only ever touches Anthropic-defined tools (they carry a `type`
+        field); a plain custom/JSON-schema local tool has no `type` key at
+        all, so `t.get("type")` is `None` for those and this can never
+        accidentally withhold one.
+        """
+        if not tools:
+            return tools
+        bad = self._unsupported_by_model.get(self.model)
+        if not bad:
+            return tools
+        return [t for t in tools if t.get("type") not in bad]
 
     def add_user_message(self, messages: list, message):
         user_message = {
@@ -322,11 +390,63 @@ class Claude:
             params["stop_sequences"] = stop_sequences
 
         if tools:
+            tools = self._filter_unsupported(tools)
             params["tools"] = tools
 
         if system:
             params["system"] = system
 
         # Beta endpoint, not client.messages.create — see BETAS above.
-        message = self.client.beta.messages.create(**params)
-        return message
+        #
+        # Retries in place rather than raising for core/chat.py to handle: an
+        # unsupported-tool-type 400 is a fundamentally different failure from
+        # the poisoned-conversation-history class core/chat.py's own repair
+        # logic already knows how to fix — resolving it here means
+        # core/chat.py never even sees this class of error, and its existing
+        # repair logic stays untouched and focused on what it already does.
+        last_error: BadRequestError | None = None
+        for _ in range(_MAX_UNSUPPORTED_TOOL_RETRIES):
+            try:
+                return self.client.beta.messages.create(**params)
+            except BadRequestError as e:
+                last_error = e
+                # `e.body` is the already-parsed error payload (a plain
+                # dict) — prefer it over `str(e)`/`e.message`, both of which
+                # are the same "Error code: 400 - {...}" wrapped
+                # representation of this same dict. Falling back to `str(e)`
+                # only if the body ever comes back in an unexpected shape
+                # (defensive, not expected to trigger in practice).
+                body = getattr(e, "body", None)
+                text = (
+                    body.get("error", {}).get("message", "")
+                    if isinstance(body, dict)
+                    else ""
+                ) or str(e)
+                match = _UNSUPPORTED_TOOL_TYPES_RE.search(text)
+                if not match or "tools" not in params:
+                    raise
+                newly_bad = {t.strip() for t in match.group(1).split(",") if t.strip()}
+                still_present = newly_bad & {
+                    t.get("type") for t in params["tools"] if t.get("type")
+                }
+                if not still_present:
+                    # The error mentions a type we've already stripped, or
+                    # one that was never in this request — re-raising avoids
+                    # an infinite loop on a message this regex matched but
+                    # whose real cause is something else entirely.
+                    raise
+                self._unsupported_by_model.setdefault(self.model, set()).update(
+                    still_present
+                )
+                params["tools"] = self._filter_unsupported(params["tools"])
+                print(
+                    f"[model compat] {self.model!r} does not support "
+                    f"{sorted(still_present)} — withheld for the rest of "
+                    "this session on this model, retrying this request..."
+                )
+        # Exhausted the retry budget without success — surface the real
+        # underlying error explicitly rather than a bare `raise`, which would
+        # have no active exception context out here and would raise a
+        # confusing RuntimeError instead of the actual cause.
+        assert last_error is not None
+        raise last_error

@@ -1,22 +1,13 @@
-"""`computer` — Anthropic's client-executed computer use tool (`computer_20251124`).
+"""`computer` — Anthropic's client-executed computer use toolset (`computer_toolset_20260801`).
 
-A learned schema: Claude already knows the action vocabulary (screenshot, clicks,
-type, key, scroll, drag, zoom, …), so there is no description to write. This
-module supplies the eyes and hands — screen capture via Pillow/pyautogui, input
-via pyautogui — and, more importantly, the coordinate contract.
+One `{"type": "computer_toolset_20260801"}` entry (no `name`) expands into 17 member tools
+server-side. Claude's calls are `tool_use` blocks whose `name` is the member (`"left_click"`,
+`"type"`, ...) and which carry `"toolset_name": "computer"`; the paired `tool_result` must echo
+it (see core/chat.py `_run_tool_uses`). No beta header is needed.
 
-**Coordinates.** Claude returns coordinates in the space of the image it was
-sent, so the declared `display_width_px`/`display_height_px` must match the
-screenshot's real pixel dimensions or every click lands offset. Real screens are
-usually larger than the ~1.15MP that reads well, so this module declares one
-fixed logical size (`CLAUDE_DISPLAY_SIZE`, default 1280x800), always downscales
-captures to exactly that, and scales Claude's coordinates back up to native
-screen space. Declared size and sent image can therefore never drift apart.
-
-**This tool is beta-gated.** `computer_20251124` requires the
-`computer-use-2025-11-24` beta header, which is why core/claude.py posts to
-`client.beta.messages.create` — see BETAS there. Declaring this tool without
-that header is a 400 on every request, not just computer-use ones.
+**Coordinates.** Claude answers in the space of the image it was last sent. This module declares
+one fixed logical size (`CLAUDE_DISPLAY_SIZE`, default 1280x800), downscales every capture to it,
+and scales Claude's coordinates back up to native screen space.
 
 **DPI scaling.** Windows' own version of the coordinate problem above, and the
 reason `_set_dpi_aware()` runs before pyautogui is ever asked anything. A
@@ -77,21 +68,32 @@ def _declared_size() -> tuple[int, int]:
 
 DISPLAY_WIDTH, DISPLAY_HEIGHT = _declared_size()
 
-COMPUTER_TOOL = {
-    "type": "computer_20251124",
-    "name": "computer",
-    "display_width_px": DISPLAY_WIDTH,
-    "display_height_px": DISPLAY_HEIGHT,
-    # Lets Claude re-inspect a region at native resolution instead of asking for
-    # a second full screenshot — cheaper, and the only way to read small text
-    # once the capture has been downscaled to the declared size.
-    "enable_zoom": True,
-}
+# A toolset entry has no `name`; the dated `type` fixes the member set.
+COMPUTER_TOOL = {"type": "computer_toolset_20260801"}
 TOOLS = [COMPUTER_TOOL]
 
-# The beta header this tool requires. core/claude.py reads it from here so the
-# header and the tool version can never drift apart.
-BETA_FLAG = "computer-use-2025-11-24"
+# The 17 member names; Claude's `tool_use.name` is one of these.
+_MEMBERS = frozenset(
+    {
+        "screenshot",
+        "zoom",
+        "left_click",
+        "right_click",
+        "middle_click",
+        "double_click",
+        "triple_click",
+        "left_click_drag",
+        "mouse_move",
+        "left_mouse_down",
+        "left_mouse_up",
+        "cursor_position",
+        "scroll",
+        "type",
+        "key",
+        "hold_key",
+        "wait",
+    }
+)
 
 # Let the UI repaint before we capture the result of an action.
 _SETTLE = 0.4
@@ -119,17 +121,18 @@ _KEY_ALIASES = {
 # Actions that never get a follow-up screenshot appended: `wait` changes nothing
 # worth re-capturing, and screenshot/zoom already *are* the capture — appending
 # to them would double the image on success and double the error on failure.
-_NO_SCREENSHOT = {"wait", "screenshot", "zoom"}
+# `cursor_position` is a text-only read.
+_NO_SCREENSHOT = {"wait", "screenshot", "zoom", "cursor_position"}
 
 
 def handles(name: str) -> bool:
-    return name == "computer"
+    return name in _MEMBERS
 
 
 async def execute(name: str, tool_input: dict) -> str | dict:
-    if name != "computer":
-        return f"Error: {name} is not handled by the computer tool"
-    return await asyncio.to_thread(_run, tool_input)
+    if name not in _MEMBERS:
+        return f"Error: {name} is not a computer-toolset member"
+    return await asyncio.to_thread(_run, name, tool_input)
 
 
 _dpi_done = False
@@ -183,12 +186,9 @@ def _set_dpi_aware() -> None:
           "coordinates may be inaccurate on a scaled display")
 
 
-def _run(tool_input: dict) -> str | dict:
+def _run(action: str, tool_input: dict) -> str | dict:
+    """Run one toolset member; `action` is the member's name."""
     _set_dpi_aware()
-
-    action = tool_input.get("action")
-    if not action:
-        return "Error: no action provided"
 
     try:
         import pyautogui
@@ -226,6 +226,10 @@ def _dispatch(pyautogui, action: str, ti: dict):
         duration = min(float(ti.get("duration", 1)), 30.0)
         time.sleep(duration)
         return f"Waited {duration}s."
+
+    if action == "cursor_position":
+        x, y = _to_declared(pyautogui, pyautogui.position())
+        return f"X={x}, Y={y}"
 
     if action == "mouse_move":
         x, y = _to_native(pyautogui, ti.get("coordinate"))
@@ -485,6 +489,14 @@ def _to_native(pyautogui, coordinate) -> tuple[int, int]:
     # Clamp: a coordinate slightly outside the declared box is a rounding
     # artefact, not a reason to fail the action.
     return max(0, min(x, native_w - 1)), max(0, min(y, native_h - 1))
+
+
+def _to_declared(pyautogui, position) -> tuple[int, int]:
+    """Real screen pixels -> declared-space coordinate (inverse of `_to_native`)."""
+    native_w, native_h = pyautogui.size()
+    x = round(int(position[0]) * DISPLAY_WIDTH / native_w)
+    y = round(int(position[1]) * DISPLAY_HEIGHT / native_h)
+    return max(0, min(x, DISPLAY_WIDTH - 1)), max(0, min(y, DISPLAY_HEIGHT - 1))
 
 
 def _grab(pyautogui):

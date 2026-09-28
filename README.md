@@ -160,6 +160,8 @@ the REPL instead of by Claude.
   well-formed, that the tool count in the docs still matches the code, and that `mcp_server.py`
   completes an MCP handshake. GitHub Actions runs it plus `ruff` and `mypy` on every push and PR to `main`
   (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
+- **`python test_model_compat_live.py` is separate, outside CI** (real API, ~9 requests): checks the
+  per-model tool-compatibility handler against Anthropic's actual error wording.
 - **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
   — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
   happens to have `pylint`/`black` installed (neither is a project dependency) they're safe to
@@ -190,6 +192,11 @@ the REPL instead of by Claude.
   first — sonnet is always placed first when present, matching Anthropic's own documented
   default recommendation. A failed scan (offline, bad key) changes nothing on disk; the
   existing cached list is used as-is.
+
+  **Haiku 4.5 has no `computer` tool.** It rejects it, so the client drops the tool for Haiku after one rejected
+  request (a `[model compat]` line is printed) and every other tool keeps working. Sonnet, Opus and Fable use
+  `computer` normally. If `computer` was used in a conversation on one of those, `/model swap` to Haiku fails
+  every turn with a 400 (`toolset_name 'computer' ... no toolset entry is declared`): swap back, or `/clear`.
 
 ## Setup (Windows)
 
@@ -1046,7 +1053,8 @@ mcp_client.py                    MCP client (stdio / SSE / Streamable HTTP)
 mcp_server.py                    the other direction — serve this agent to an MCP client
 .mcp.json                        example Claude Code registration for mcp_server.py
 smoke_test.py                    fast wiring checks — no API key, no network
-.github/workflows/ci.yml         runs ruff + smoke_test.py on push and PR
+test_model_compat_live.py        live check of the model-compat handler (spends tokens, not in CI)
+.github/workflows/ci.yml         runs ruff, mypy, smoke_test.py on push and PR
 config.toml                      model + MCP server list (no secrets; committed)
 pyproject.toml                   metadata, deps, and the ruff exemptions (lint config)
 requirements.txt                 the same deps, for `pip install -r`

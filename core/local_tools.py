@@ -39,7 +39,7 @@ MODULES = [
     powershell,  # the shell
     powershell_session,  # persistent pwsh: cd/vars/functions survive calls
     memory,      # cross-session memory (learned schema)
-    computer,    # screen/mouse/keyboard control (learned schema, beta-gated)
+    computer,    # screen/mouse/keyboard control (client toolset, no beta header)
     browser,     # Playwright DOM surfing
     documents,   # LibreOffice / pandoc conversion
     kernel,      # stateful IPython
@@ -68,11 +68,9 @@ MODULES = [
 
 TOOLS = [tool for module in MODULES for tool in module.TOOLS]
 
-_DUPLICATES = {
-    name
-    for name in (t["name"] for t in TOOLS)
-    if [t["name"] for t in TOOLS].count(name) > 1
-}
+# A client toolset entry has no "name"; skip those when checking for duplicates.
+_NAMED = [t["name"] for t in TOOLS if "name" in t]
+_DUPLICATES = {name for name in _NAMED if _NAMED.count(name) > 1}
 if _DUPLICATES:
     raise ValueError(f"duplicate local tool names: {sorted(_DUPLICATES)}")
 

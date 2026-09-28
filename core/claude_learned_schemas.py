@@ -25,8 +25,20 @@ TEXT_EDITOR_TOOL = {
 # `response_inclusion` to both (not required — set it to "excluded" to drop dynamically-filtered
 # result blocks from the response); web_fetch also carries `use_cache` from
 # 20260309. Both are left at their defaults ("full" / true) here.
-WEB_SEARCH_TOOL = {"type": "web_search_20260318", "name": "web_search"}
-WEB_FETCH_TOOL = {"type": "web_fetch_20260318", "name": "web_fetch"}
+#
+# `allowed_callers: ["direct"]` is explicit: unset, these tools are opted into programmatic tool
+# calling (invoked from `code_execution`, which this project does not use), and Haiku 4.5
+# rejects the whole request over that.
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20260318",
+    "name": "web_search",
+    "allowed_callers": ["direct"],
+}
+WEB_FETCH_TOOL = {
+    "type": "web_fetch_20260318",
+    "name": "web_fetch",
+    "allowed_callers": ["direct"],
+}
 
 TOOLS = [TEXT_EDITOR_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL]
 

@@ -629,28 +629,34 @@ class Chat:
         mcp_blocks: list = []
 
         for block in blocks:
+            # `toolset_name` is "computer" for a computer-toolset member, None otherwise; the
+            # paired tool_result must echo it or the API rejects the batch.
+            toolset_name = getattr(block, "toolset_name", None)
+
             try:
                 local = await local_tools.execute(block.name, block.input)
             except Exception as e:
                 print(f"[local tool '{block.name}' raised: {e}]")
-                results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": f"Error executing tool '{block.name}': {e}",
-                        "is_error": True,
-                    }
-                )
+                error_result = {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": f"Error executing tool '{block.name}': {e}",
+                    "is_error": True,
+                }
+                if toolset_name is not None:
+                    error_result["toolset_name"] = toolset_name
+                results.append(error_result)
                 continue
 
             if local is not None:
-                results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": _local_result_to_content(local),
-                    }
-                )
+                ok_result = {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": _local_result_to_content(local),
+                }
+                if toolset_name is not None:
+                    ok_result["toolset_name"] = toolset_name
+                results.append(ok_result)
             else:
                 mcp_blocks.append(block)
 
