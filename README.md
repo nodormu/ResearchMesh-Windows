@@ -162,8 +162,17 @@ the REPL instead of by Claude.
   (`.github/workflows/ci.yml`), on Python 3.11 and 3.14.
 - **`python test_model_compat_live.py` is separate, outside CI** (real API, ~9 requests): checks the
   per-model tool-compatibility handler against Anthropic's actual error wording.
-- **There are still no unit tests**, and CI deliberately doesn't exercise the tools themselves
-  — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
+- **`python test_midi1.py` tests the `midi1` tool**, outside CI. It covers message bytes against a
+  recorded snapshot, the specs' worked examples, decoding and the `describe` docs. Its live part
+  sends through a virtual MIDI cable and reads it back, and also measures how Windows handles
+  large SysEx and bursts.
+  - **That part needs a loopback port**, and Windows has none built in. The free
+    [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) provides one: create one
+    port and keep "loopMIDI" in its name.
+  - **Without it**, the test prints `skip  live loopback` and runs the rest.
+  - **Close DAWs** that have that port enabled while it runs.
+- **`test_midi1.py` is the one tool test suite**, and CI deliberately doesn't exercise the tools
+  themselves — that would need LibreOffice, a browser, a real desktop and real API credits. If your venv
   happens to have `pylint`/`black` installed (neither is a project dependency) they're safe to
   run by hand — expect plenty of output, since nothing is configured for them.
 - **Two things a linter will fight you on here** — worth knowing before you "fix" them.
@@ -1054,6 +1063,8 @@ mcp_server.py                    the other direction — serve this agent to an 
 .mcp.json                        example Claude Code registration for mcp_server.py
 smoke_test.py                    fast wiring checks — no API key, no network
 test_model_compat_live.py        live check of the model-compat handler (spends tokens, not in CI)
+test_midi1.py                    midi1 tests; the live part needs a loopMIDI port (not in CI)
+test_midi1_snapshot.json         recorded message bytes test_midi1.py compares against
 .github/workflows/ci.yml         runs ruff, mypy, smoke_test.py on push and PR
 config.toml                      model + MCP server list (no secrets; committed)
 pyproject.toml                   metadata, deps, and the ruff exemptions (lint config)
