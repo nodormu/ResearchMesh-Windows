@@ -335,34 +335,18 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   `"base"`), `default_duration_seconds` (default 8), and `max_duration_seconds` (default
   30, a hard cap) all come from `[listen]`, re-read fresh per call.
 
-- **`core/midi1.py`** — `midi1`: MIDI 1.0 device discovery and I/O via
-  `mido[ports-rtmidi]`, which speaks WinMM/WinRT on this platform through the same
-  cross-platform API `mido`/`python-rtmidi` exposes everywhere — no Windows-specific
-  branch was needed anywhere in this module. `list_devices`/
-  `open`/`close`/`send`/`poll` cover named-port discovery and channel/System-Common/
-  System-Real-Time messages plus generic SysEx; `poll` captures every incoming message
-  via a custom callback registered at `open` time (not at poll-call time) into a
-  bounded per-handle `deque` with a real wall-clock `received_at` timestamp, and can
-  either return instantly with whatever's buffered or block with a caller-specified
-  `timeout_seconds` via a `threading.Event`. A large family of typed convenience
-  messages (`mtc_full`, `mmc` — including the full Information-Field register,
-  `masked_write`, and a `decode_mmc_response` action — `msc`, `rpn`/`nrpn`, `gm_system`,
-  `device_inquiry`/`device_control`, `channel_mode`, `midi_tuning`, `notation`,
-  `mtc_cueing`/`mtc_cueing_nrt`, `file_dump`, `mtc_nak`, and
-  `mtc_quarter_frame_sequence`) are all built as validated payloads on top of the same
-  generic `sysex` mechanism rather than as separate code paths, plus full `.mid`/`.syx`
-  file read+write via `mido.MidiFile`/raw SysEx framing. Every hardware-touching call
-  (`open`/`send`/`close`, and now `poll` when it blocks) runs through
-  `asyncio.wait_for(asyncio.to_thread(...), timeout=...)` so a hung driver or
-  misbehaving device can't wedge the caller forever — a known, stated limitation is that
-  this bounds the *caller's* wait but cannot kill the underlying OS thread, which is why
-  `poll`'s own blocking `timeout_seconds` is capped at 60s. `close_all()` is wired into
-  `local_tools.shutdown()` so open ports are released on exit. `active_sensing` can be
-  sent but never appears in `poll` results — mido's rtmidi backend hardcodes it out at
-  the library level, not fixable without bypassing mido. A companion MIDI 2.0/UMP tool
-  was developed alongside this one but has since been removed and moved to its own
-  standalone project — this module only carries MIDI 1.0 forward, matching this
-  project's current scope (see Overview above).
+- **`core/midi1.py`** — `midi1`: MIDI 1.0 device I/O, building and decoding every MIDI 1.0 message, and `.mid`/`.syx` files.
+  - **Origin:** it's the same file as the Linux and macOS clients' (branch `midi1-shared-layer-and-decoding`, 2026-10-02). `_PORT_BACKEND` is "alsa" on Linux and "rtmidi" here: `_RtMidiInput`/`_RtMidiOutput` open python-rtmidi's MidiIn/MidiOut over **WinMM**. The ALSA code is only used on Linux. `MIDI1_PORT_BACKEND=rtmidi` forces the rtmidi path on Linux, which is how it was tested there.
+  - **Receiving:** `open` with `active_sensing: true` passes Active Sensing to `poll`. `poll` entries carry `received_at`, `decoded`, `completes` (RPN/NRPN, Quarter Frame and MMC segment reassembly) and `at_open` (the burst that arrives as an input opens).
+  - **Field docs:** the `describe` action documents every message type's fields with an example.
+  - **Timeouts:** every hardware-touching call runs under `asyncio.wait_for(asyncio.to_thread(...))`, so a hung driver can't block the caller forever. It can't kill the stuck thread, which is why `poll`'s `timeout_seconds` is capped at 60 s.
+  - **Shutdown:** `close_all()` is wired into `local_tools.shutdown()`.
+  - **Tests:** `test_midi1.py`, run from the repo root. Its live loopback needs a loopback port; Windows has none built in, and loopMIDI provides one. With the rtmidi backend, the burst and large-SysEx results print as `info` measurements instead of checks.
+  - **Not measured on Windows:**
+    - how WinMM handles a burst of over 1,500 messages
+    - a large outgoing SysEx: RtMidi sends it in one `midiOutLongMsg` and waits for the driver
+    - a large incoming SysEx, which arrives through RtMidi's small fixed set of WinMM input buffers; python-rtmidi 1.5.8, bundling RtMidi 5.0.0, can't resize them
+  - **MIDI 2.0:** the companion MIDI 2.0/UMP tool lives in its own standalone project.
 
 - **`core/output.py`** — `clip(text, limit)`, the one truncation helper the local tool modules share (shell/editor/kernel/ConPTY budget 12000 chars, browser 6000), plus `strip_ansi(text)`, `IMAGE_MEDIA_TYPES` and `image_result(...)`. `strip_ansi` is shared by the two tools whose output arrives as terminal bytes — the IPython kernel's coloured tracebacks and `interactive_run`'s ConPTY transcript — and is deliberately wider than a colour-code pattern, since a console transcript also carries cursor positioning, erase-in-line, private-mode toggles and OSC title sets. The latter builds the `{"__kind__": "image", ...}` marker that a tool returns instead of a string when its result is pixels (file-editor/memory `view` on an image, every computer screenshot); `Chat._local_result_to_content` turns it into a real `image` content block.
 

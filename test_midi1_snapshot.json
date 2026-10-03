@@ -1,0 +1,2538 @@
+{
+ "messages": {
+  "active_sensing": [
+   [
+    "FE",
+    0
+   ]
+  ],
+  "aftertouch": [
+   [
+    "D2 5A",
+    0
+   ]
+  ],
+  "channel_mode all_notes_off": [
+   [
+    "B4 7B 00",
+    0
+   ]
+  ],
+  "channel_mode all_sound_off": [
+   [
+    "B4 78 00",
+    0
+   ]
+  ],
+  "channel_mode local_control off": [
+   [
+    "B0 7A 00",
+    0
+   ]
+  ],
+  "channel_mode local_control on": [
+   [
+    "B0 7A 7F",
+    0
+   ]
+  ],
+  "channel_mode mono_on 0": [
+   [
+    "B0 7E 00",
+    0
+   ]
+  ],
+  "channel_mode mono_on 4": [
+   [
+    "B0 7E 04",
+    0
+   ]
+  ],
+  "channel_mode omni_off": [
+   [
+    "B4 7C 00",
+    0
+   ]
+  ],
+  "channel_mode omni_on": [
+   [
+    "B4 7D 00",
+    0
+   ]
+  ],
+  "channel_mode poly_on": [
+   [
+    "B4 7F 00",
+    0
+   ]
+  ],
+  "channel_mode reset_all_controllers": [
+   [
+    "B4 79 00",
+    0
+   ]
+  ],
+  "clock": [
+   [
+    "F8",
+    0
+   ]
+  ],
+  "continue": [
+   [
+    "FB",
+    0
+   ]
+  ],
+  "control_change": [
+   [
+    "B1 07 64",
+    0
+   ]
+  ],
+  "controller_destination channel_pressure": [
+   [
+    "F0 7F 7F 09 01 06 00 42 01 60 F7",
+    0
+   ]
+  ],
+  "controller_destination control_change": [
+   [
+    "F0 7F 7F 09 03 02 01 05 20 F7",
+    0
+   ]
+  ],
+  "controller_destination poly_pressure": [
+   [
+    "F0 7F 7F 09 02 00 02 40 F7",
+    0
+   ]
+  ],
+  "device_control gpc chorus numeric": [
+   [
+    "F0 7F 7F 04 05 01 01 01 01 02 03 10 04 09 F7",
+    0
+   ]
+  ],
+  "device_control gpc raw widths": [
+   [
+    "F0 7F 7F 04 05 02 02 03 01 03 02 04 00 01 05 06 07 F7",
+    0
+   ]
+  ],
+  "device_control gpc reverb": [
+   [
+    "F0 7F 7F 04 05 01 01 01 01 01 00 04 01 40 F7",
+    0
+   ]
+  ],
+  "device_control master_balance": [
+   [
+    "F0 7F 01 04 02 00 40 F7",
+    0
+   ]
+  ],
+  "device_control master_coarse_tuning": [
+   [
+    "F0 7F 7F 04 04 00 46 F7",
+    0
+   ]
+  ],
+  "device_control master_fine_tuning": [
+   [
+    "F0 7F 7F 04 03 00 40 F7",
+    0
+   ]
+  ],
+  "device_control master_volume": [
+   [
+    "F0 7F 7F 04 01 7F 7F F7",
+    0
+   ]
+  ],
+  "device_inquiry reply": [
+   [
+    "F0 7E 10 06 02 41 23 02 2C 02 01 02 03 04 F7",
+    0
+   ]
+  ],
+  "device_inquiry reply extended id": [
+   [
+    "F0 7E 7F 06 02 00 20 6B 02 00 03 00 00 00 00 01 F7",
+    0
+   ]
+  ],
+  "device_inquiry request": [
+   [
+    "F0 7E 7F 06 01 F7",
+    0
+   ]
+  ],
+  "err: controller_destination control 0x30": {
+   "error": "ValueError"
+  },
+  "err: device_inquiry mfr 0 as int": {
+   "error": "ValueError"
+  },
+  "err: file_dump file_type length": {
+   "error": "ValueError"
+  },
+  "err: file_dump missing device_id": {
+   "error": "KeyError"
+  },
+  "err: file_dump source 127": {
+   "error": "ValueError"
+  },
+  "err: gpc effect and slot_path": {
+   "error": "ValueError"
+  },
+  "err: gpc value width mismatch": {
+   "error": "ValueError"
+  },
+  "err: key_based control data entry": {
+   "error": "ValueError"
+  },
+  "err: key_based_dump missing bank": {
+   "error": "KeyError"
+  },
+  "err: midi_tuning 127 notes": {
+   "error": "ValueError"
+  },
+  "err: midi_tuning cents 100": {
+   "error": "ValueError"
+  },
+  "err: missing type": {
+   "error": "ValueError"
+  },
+  "err: mmc bad command": {
+   "error": "ValueError"
+  },
+  "err: mmc command and batch": {
+   "error": "ValueError"
+  },
+  "err: mmc command string over 48 bytes": {
+   "error": "ValueError"
+  },
+  "err: mmc command_segment remaining 64": {
+   "error": "ValueError"
+  },
+  "err: mmc command_segment with other commands": {
+   "error": "ValueError"
+  },
+  "err: mmc device_id 128": {
+   "error": "ValueError"
+  },
+  "err: mmc group assign 7F": {
+   "error": "ValueError"
+  },
+  "err: mmc locate i/f non-GP field": {
+   "error": "ValueError"
+  },
+  "err: mmc locate name and time": {
+   "error": "ValueError"
+  },
+  "err: mmc masked_write time code field": {
+   "error": "ValueError"
+  },
+  "err: mmc missing command": {
+   "error": "KeyError"
+  },
+  "err: mmc procedure execute 7F": {
+   "error": "ValueError"
+  },
+  "err: mmc procedure nested assemble": {
+   "error": "ValueError"
+  },
+  "err: mmc segment_size 46": {
+   "error": "ValueError"
+  },
+  "err: mmc speed negative": {
+   "error": "ValueError"
+  },
+  "err: mmc update begin all": {
+   "error": "ValueError"
+  },
+  "err: mmc wait with other commands": {
+   "error": "ValueError"
+  },
+  "err: mmc write generator_set_up run_reference 9": {
+   "error": "ValueError"
+  },
+  "err: mmc write read-only field": {
+   "error": "ValueError"
+  },
+  "err: mmc write read-only record_status": {
+   "error": "ValueError"
+  },
+  "err: mmc write stop_mode bad name": {
+   "error": "ValueError"
+  },
+  "err: mmc write time_standard bad encoding": {
+   "error": "ValueError"
+  },
+  "err: mmc write track 318": {
+   "error": "ValueError"
+  },
+  "err: msc 2pc checksum name": {
+   "error": "ValueError"
+  },
+  "err: msc abort status low bits": {
+   "error": "ValueError"
+  },
+  "err: msc both formats": {
+   "error": "ValueError"
+  },
+  "err: msc cancelled abort-only status": {
+   "error": "ValueError"
+  },
+  "err: msc cue_data 3 values": {
+   "error": "ValueError"
+  },
+  "err: msc open_cue_list without q_list": {
+   "error": "KeyError"
+  },
+  "err: msc q_list without q_number": {
+   "error": "ValueError"
+  },
+  "err: msc set partial time": {
+   "error": "ValueError"
+  },
+  "err: msc standby without checksum": {
+   "error": "KeyError"
+  },
+  "err: msc standby without q_number": {
+   "error": "KeyError"
+  },
+  "err: mtc_cueing both info sources": {
+   "error": "ValueError"
+  },
+  "err: mtc_full bad frame_rate": {
+   "error": "ValueError"
+  },
+  "err: mtc_full hours 24": {
+   "error": "ValueError"
+  },
+  "err: mtc_full minutes 60": {
+   "error": "ValueError"
+  },
+  "err: mtc_full missing frame_rate": {
+   "error": "KeyError"
+  },
+  "err: mtc_user_bits both inputs": {
+   "error": "ValueError"
+  },
+  "err: mtc_user_bits flags 4": {
+   "error": "ValueError"
+  },
+  "err: mtc_user_bits nibble 16": {
+   "error": "ValueError"
+  },
+  "err: notation denominator 3": {
+   "error": "ValueError"
+  },
+  "err: note_on missing note": {
+   "error": "KeyError"
+  },
+  "err: note_on velocity 128": {
+   "error": "ValueError"
+  },
+  "err: quarter_frame_sequence bad direction": {
+   "error": "ValueError"
+  },
+  "err: rpn both parameter fields": {
+   "error": "ValueError"
+  },
+  "err: rpn msb_only value 128": {
+   "error": "ValueError"
+  },
+  "err: sample_dump bad loop_type": {
+   "error": "ValueError"
+  },
+  "err: sample_dump data and words": {
+   "error": "ValueError"
+  },
+  "err: sample_dump format 29": {
+   "error": "ValueError"
+  },
+  "err: sample_dump too many 8-bit words": {
+   "error": "ValueError"
+  },
+  "err: scale_octave 11 offsets": {
+   "error": "ValueError"
+  },
+  "err: scale_octave channel 16": {
+   "error": "ValueError"
+  },
+  "err: sysex byte 128": {
+   "error": "ValueError"
+  },
+  "err: sysex missing data": {
+   "error": "KeyError"
+  },
+  "err: tuning real_time not bool": {
+   "error": "TypeError"
+  },
+  "err: unknown type": {
+   "error": "ValueError"
+  },
+  "file_dump ack": [
+   [
+    "F0 7E 01 7F 04 F7",
+    0
+   ]
+  ],
+  "file_dump cancel": [
+   [
+    "F0 7E 01 7D 00 F7",
+    0
+   ]
+  ],
+  "file_dump data_packet": [
+   [
+    "F0 7E 01 07 02 03 0B 32 00 7F 00 7F 01 7E 55 50 2A 10 10 10 F7",
+    0
+   ]
+  ],
+  "file_dump eof": [
+   [
+    "F0 7E 01 7B 00 F7",
+    0
+   ]
+  ],
+  "file_dump header": [
+   [
+    "F0 7E 01 07 01 02 42 49 4E 20 6F 1B 2F 05 61 2E 62 69 6E F7",
+    0
+   ]
+  ],
+  "file_dump header unknown length": [
+   [
+    "F0 7E 01 07 01 02 54 45 58 54 00 00 00 00 F7",
+    0
+   ]
+  ],
+  "file_dump nak": [
+   [
+    "F0 7E 01 7E 04 F7",
+    0
+   ]
+  ],
+  "file_dump request": [
+   [
+    "F0 7E 01 07 03 02 4D 49 44 49 73 6F 6E 67 2E 6D 69 64 F7",
+    0
+   ]
+  ],
+  "file_dump wait": [
+   [
+    "F0 7E 01 7C 00 F7",
+    0
+   ]
+  ],
+  "gm_system gm2_on": [
+   [
+    "F0 7E 7F 09 03 F7",
+    0
+   ]
+  ],
+  "gm_system off": [
+   [
+    "F0 7E 10 09 02 F7",
+    0
+   ]
+  ],
+  "gm_system on": [
+   [
+    "F0 7E 7F 09 01 F7",
+    0
+   ]
+  ],
+  "key_based_instrument_control": [
+   [
+    "F0 7F 7F 0A 01 09 26 07 50 78 40 F7",
+    0
+   ]
+  ],
+  "midi_tuning bulk_dump_reply": [
+   [
+    "F0 7E 7F 08 01 03 4A 75 73 74 20 43 20 20 20 20 20 20 20 20 20 20 7F 7F 7F 01 08 7B 02 11 76 7F 7F 7F 04 23 6C 05 2C 66 7F 7F 7F 07 3E 5C 08 47 57 7F 7F 7F 0A 59 4D 0B 62 48 7F 7F 7F 0D 74 3D 0E 7D 38 7F 7F 7F 10 0F 2E 11 18 29 7F 7F 7F 13 2A 1F 14 33 1A 7F 7F 7F 16 45 0F 17 4E 0A 7F 7F 7F 19 60 00 1A 68 7B 7F 7F 7F 1C 7A 71 1D 03 6C 7F 7F 7F 1F 15 61 20 1E 5C 7F 7F 7F 22 30 52 23 39 4D 7F 7F 7F 25 4B 43 26 54 3D 7F 7F 7F 28 66 33 29 6F 2E 7F 7F 7F 2B 01 24 2C 0A 1F 7F 7F 7F 2E 1C 14 2F 25 0F 7F 7F 7F 31 37 05 32 40 00 7F 7F 7F 34 51 76 35 5A 71 7F 7F 7F 37 6C 66 38 75 61 7F 7F 7F 3A 07 57 3B 10 52 7F 7F 7F 3D 22 48 3E 2B 43 7F 7F 7F 40 3D 38 41 46 33 7F 7F 7F 43 58 29 44 61 24 7F 7F 7F 46 73 1A 47 7C 14 7F 7F 7F 49 0E 0A 4A 17 05 7F 7F 7F 4C 28 7B 4D 31 76 7F 7F 7F 4F 43 6C 50 4C 66 7F 7F 7F 52 5E 5C 53 67 57 7F 7F 7F 55 79 4D 56 02 48 7F 7F 7F 58 14 3D 59 1D 38 7F 7F 7F 5B 2F 2E 5C 38 29 7F 7F 7F 5E 4A 1F 5F 53 1A 7F 7F 7F 61 65 0F 62 6E 0A 7F 7F 7F 64 00 00 65 08 7B 7F 7F 7F 67 1A 71 68 23 6C 7F 7F 7F 6A 35 61 6B 3E 5C 7F 7F 7F 6D 50 52 6E 59 4D 7F 7F 7F 70 6B 43 71 74 3D 7F 7F 7F 73 06 33 74 0F 2E 7F 7F 7F 76 21 24 77 2A 1F 7F 7F 7F 79 3C 14 7A 45 0F 7F 7F 7F 7C 57 05 7D 60 00 7F 7F 7F 7F 71 76 6C F7",
+    0
+   ]
+  ],
+  "midi_tuning bulk_dump_request": [
+   [
+    "F0 7E 7F 08 00 03 F7",
+    0
+   ]
+  ],
+  "midi_tuning bulk_dump_request_bank": [
+   [
+    "F0 7E 7F 08 03 02 05 F7",
+    0
+   ]
+  ],
+  "midi_tuning key_based_dump": [
+   [
+    "F0 7E 7F 08 04 01 03 57 65 72 63 6B 6D 65 69 73 74 65 72 20 20 20 20 7F 7F 7F 01 08 7B 02 11 76 7F 7F 7F 04 23 6C 05 2C 66 7F 7F 7F 07 3E 5C 08 47 57 7F 7F 7F 0A 59 4D 0B 62 48 7F 7F 7F 0D 74 3D 0E 7D 38 7F 7F 7F 10 0F 2E 11 18 29 7F 7F 7F 13 2A 1F 14 33 1A 7F 7F 7F 16 45 0F 17 4E 0A 7F 7F 7F 19 60 00 1A 68 7B 7F 7F 7F 1C 7A 71 1D 03 6C 7F 7F 7F 1F 15 61 20 1E 5C 7F 7F 7F 22 30 52 23 39 4D 7F 7F 7F 25 4B 43 26 54 3D 7F 7F 7F 28 66 33 29 6F 2E 7F 7F 7F 2B 01 24 2C 0A 1F 7F 7F 7F 2E 1C 14 2F 25 0F 7F 7F 7F 31 37 05 32 40 00 7F 7F 7F 34 51 76 35 5A 71 7F 7F 7F 37 6C 66 38 75 61 7F 7F 7F 3A 07 57 3B 10 52 7F 7F 7F 3D 22 48 3E 2B 43 7F 7F 7F 40 3D 38 41 46 33 7F 7F 7F 43 58 29 44 61 24 7F 7F 7F 46 73 1A 47 7C 14 7F 7F 7F 49 0E 0A 4A 17 05 7F 7F 7F 4C 28 7B 4D 31 76 7F 7F 7F 4F 43 6C 50 4C 66 7F 7F 7F 52 5E 5C 53 67 57 7F 7F 7F 55 79 4D 56 02 48 7F 7F 7F 58 14 3D 59 1D 38 7F 7F 7F 5B 2F 2E 5C 38 29 7F 7F 7F 5E 4A 1F 5F 53 1A 7F 7F 7F 61 65 0F 62 6E 0A 7F 7F 7F 64 00 00 65 08 7B 7F 7F 7F 67 1A 71 68 23 6C 7F 7F 7F 6A 35 61 6B 3E 5C 7F 7F 7F 6D 50 52 6E 59 4D 7F 7F 7F 70 6B 43 71 74 3D 7F 7F 7F 73 06 33 74 0F 2E 7F 7F 7F 76 21 24 77 2A 1F 7F 7F 7F 79 3C 14 7A 45 0F 7F 7F 7F 7C 57 05 7D 60 00 7F 7F 7F 7F 71 76 0A F7",
+    0
+   ]
+  ],
+  "midi_tuning note_change": [
+   [
+    "F0 7F 7F 08 02 00 03 45 45 00 00 46 46 7F 7E 47 7F 7F 7F F7",
+    0
+   ]
+  ],
+  "midi_tuning note_change_bank": [
+   [
+    "F0 7F 7F 08 07 04 01 01 3C 3C 40 00 F7",
+    0
+   ]
+  ],
+  "midi_tuning note_change_bank non real time": [
+   [
+    "F0 7E 7F 08 07 04 01 01 3D 7F 7F 7F F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_1byte": [
+   [
+    "F0 7F 7F 08 08 02 04 01 40 40 40 40 40 40 40 40 40 40 40 46 F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_1byte non real time": [
+   [
+    "F0 7E 7F 08 08 01 41 40 3A 3B 3C 3D 3E 3F 40 41 42 43 44 45 F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_2byte": [
+   [
+    "F0 7F 7F 08 09 03 7F 7F 40 00 40 00 40 00 40 00 40 00 40 00 40 00 40 00 40 00 40 00 40 00 40 00 F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_2byte non real time": [
+   [
+    "F0 7E 7F 08 09 00 00 08 00 00 7F 7F 00 00 7F 7F 00 00 7F 7F 00 00 7F 7F 00 00 7F 7F 00 00 7F 7F F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_dump_1byte": [
+   [
+    "F0 7E 7F 08 05 00 07 4A 75 73 74 20 20 20 20 20 20 20 20 20 20 20 20 40 34 44 50 32 3E 36 42 4E 30 3C 4C 25 F7",
+    0
+   ]
+  ],
+  "midi_tuning scale_octave_dump_2byte": [
+   [
+    "F0 7E 7F 08 06 7F 7F 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 40 00 00 00 7F 7F 3E 40 41 50 00 01 00 02 00 03 46 28 36 58 40 00 00 64 04 F7",
+    0
+   ]
+  ],
+  "mmc add": [
+   [
+    "F0 7F 7F 06 4D 03 09 0A 01 F7",
+    0
+   ]
+  ],
+  "mmc assign_system_master": [
+   [
+    "F0 7F 7F 06 49 01 04 F7",
+    0
+   ]
+  ],
+  "mmc chase": [
+   [
+    "F0 7F 7F 06 0B F7",
+    0
+   ]
+  ],
+  "mmc command_error_reset": [
+   [
+    "F0 7F 7F 06 0C F7",
+    0
+   ]
+  ],
+  "mmc command_segment single": [
+   [
+    "F0 7F 7F 06 53 05 42 44 06 01 21 F7",
+    0
+   ]
+  ],
+  "mmc deferred_play": [
+   [
+    "F0 7F 7F 06 03 F7",
+    0
+   ]
+  ],
+  "mmc deferred_variable_play speed 0.5 rev": [
+   [
+    "F0 7F 7F 06 54 03 40 40 00 F7",
+    0
+   ]
+  ],
+  "mmc deferred_variable_play speed 1.0": [
+   [
+    "F0 7F 7F 06 54 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "mmc deferred_variable_play speed 100.25": [
+   [
+    "F0 7F 7F 06 54 03 26 22 00 F7",
+    0
+   ]
+  ],
+  "mmc drop_frame_adjust": [
+   [
+    "F0 7F 7F 06 4F 01 0B F7",
+    0
+   ]
+  ],
+  "mmc eject": [
+   [
+    "F0 7F 7F 06 0A F7",
+    0
+   ]
+  ],
+  "mmc event define": [
+   [
+    "F0 7F 7F 06 51 06 00 01 52 01 0C 02 F7",
+    0
+   ]
+  ],
+  "mmc event define forward": [
+   [
+    "F0 7F 7F 06 51 06 00 03 00 07 08 01 F7",
+    0
+   ]
+  ],
+  "mmc event delete": [
+   [
+    "F0 7F 7F 06 51 02 01 01 F7",
+    0
+   ]
+  ],
+  "mmc event set": [
+   [
+    "F0 7F 7F 06 51 02 02 01 F7",
+    0
+   ]
+  ],
+  "mmc event test": [
+   [
+    "F0 7F 7F 06 51 02 03 01 F7",
+    0
+   ]
+  ],
+  "mmc fast_forward": [
+   [
+    "F0 7F 7F 06 04 F7",
+    0
+   ]
+  ],
+  "mmc generator_command copy_jam": [
+   [
+    "F0 7F 7F 06 4A 01 02 F7",
+    0
+   ]
+  ],
+  "mmc generator_command run": [
+   [
+    "F0 7F 7F 06 4A 01 01 F7",
+    0
+   ]
+  ],
+  "mmc generator_command stop": [
+   [
+    "F0 7F 7F 06 4A 01 00 F7",
+    0
+   ]
+  ],
+  "mmc group assign": [
+   [
+    "F0 7F 7F 06 52 05 00 03 01 02 05 F7",
+    0
+   ]
+  ],
+  "mmc group dis_assign all": [
+   [
+    "F0 7F 7F 06 52 03 01 7F 7F F7",
+    0
+   ]
+  ],
+  "mmc locate": [
+   [
+    "F0 7F 7F 06 44 06 01 41 25 34 10 32 F7",
+    0
+   ]
+  ],
+  "mmc locate i/f": [
+   [
+    "F0 7F 7F 06 44 02 00 0B F7",
+    0
+   ]
+  ],
+  "mmc masked_write": [
+   [
+    "F0 7F 7F 06 41 08 62 00 7F 15 4F 02 01 01 F7",
+    0
+   ]
+  ],
+  "mmc midi_time_code_command follow": [
+   [
+    "F0 7F 7F 06 4B 01 02 F7",
+    0
+   ]
+  ],
+  "mmc midi_time_code_command off": [
+   [
+    "F0 7F 7F 06 4B 01 00 F7",
+    0
+   ]
+  ],
+  "mmc mmc_reset": [
+   [
+    "F0 7F 7F 06 0D F7",
+    0
+   ]
+  ],
+  "mmc move": [
+   [
+    "F0 7F 7F 06 4C 02 08 04 F7",
+    0
+   ]
+  ],
+  "mmc pause": [
+   [
+    "F0 7F 7F 06 09 F7",
+    0
+   ]
+  ],
+  "mmc play": [
+   [
+    "F0 7F 7F 06 02 F7",
+    0
+   ]
+  ],
+  "mmc procedure assemble": [
+   [
+    "F0 7F 7F 06 50 0B 00 02 01 44 06 01 21 25 34 10 00 F7",
+    0
+   ]
+  ],
+  "mmc procedure delete": [
+   [
+    "F0 7F 7F 06 50 02 01 02 F7",
+    0
+   ]
+  ],
+  "mmc procedure delete all": [
+   [
+    "F0 7F 7F 06 50 02 01 7F F7",
+    0
+   ]
+  ],
+  "mmc procedure execute": [
+   [
+    "F0 7F 7F 06 50 02 03 02 F7",
+    0
+   ]
+  ],
+  "mmc procedure set": [
+   [
+    "F0 7F 7F 06 50 02 02 02 F7",
+    0
+   ]
+  ],
+  "mmc read": [
+   [
+    "F0 7F 7F 06 42 02 01 62 F7",
+    0
+   ]
+  ],
+  "mmc read new fields": [
+   [
+    "F0 7F 7F 06 42 03 48 26 40 F7",
+    0
+   ]
+  ],
+  "mmc record_exit": [
+   [
+    "F0 7F 7F 06 07 F7",
+    0
+   ]
+  ],
+  "mmc record_pause": [
+   [
+    "F0 7F 7F 06 08 F7",
+    0
+   ]
+  ],
+  "mmc record_strobe": [
+   [
+    "F0 7F 7F 06 06 F7",
+    0
+   ]
+  ],
+  "mmc record_strobe_variable speed 0.5 rev": [
+   [
+    "F0 7F 7F 06 55 03 40 40 00 F7",
+    0
+   ]
+  ],
+  "mmc record_strobe_variable speed 1.0": [
+   [
+    "F0 7F 7F 06 55 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "mmc record_strobe_variable speed 100.25": [
+   [
+    "F0 7F 7F 06 55 03 26 22 00 F7",
+    0
+   ]
+  ],
+  "mmc resume": [
+   [
+    "F0 7F 7F 06 7F F7",
+    0
+   ]
+  ],
+  "mmc rewind": [
+   [
+    "F0 7F 7F 06 05 F7",
+    0
+   ]
+  ],
+  "mmc search speed 0.5 rev": [
+   [
+    "F0 7F 7F 06 46 03 40 40 00 F7",
+    0
+   ]
+  ],
+  "mmc search speed 1.0": [
+   [
+    "F0 7F 7F 06 46 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "mmc search speed 100.25": [
+   [
+    "F0 7F 7F 06 46 03 26 22 00 F7",
+    0
+   ]
+  ],
+  "mmc segmented size 1": [
+   [
+    "F0 7F 7F 06 53 02 41 01 F7",
+    0
+   ],
+   [
+    "F0 7F 7F 06 53 02 00 02 F7",
+    0
+   ]
+  ],
+  "mmc seven locates segmented": [
+   [
+    "F0 7F 03 06 53 2E 41 44 06 01 21 25 34 10 00 44 06 01 21 25 34 10 00 44 06 01 21 25 34 10 00 44 06 01 21 25 34 10 00 44 06 01 21 25 34 10 00 44 06 01 21 25 F7",
+    0
+   ],
+   [
+    "F0 7F 03 06 53 0C 00 34 10 00 44 06 01 21 25 34 10 00 F7",
+    0
+   ]
+  ],
+  "mmc several commands": [
+   [
+    "F0 7F 05 06 01 44 06 01 21 25 34 10 00 02 F7",
+    0
+   ]
+  ],
+  "mmc several commands with all-call": [
+   [
+    "F0 7F 7F 06 49 01 02 0B F7",
+    0
+   ]
+  ],
+  "mmc shuttle speed 0.5 rev": [
+   [
+    "F0 7F 7F 06 47 03 40 40 00 F7",
+    0
+   ]
+  ],
+  "mmc shuttle speed 1.0": [
+   [
+    "F0 7F 7F 06 47 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "mmc shuttle speed 100.25": [
+   [
+    "F0 7F 7F 06 47 03 26 22 00 F7",
+    0
+   ]
+  ],
+  "mmc step forward": [
+   [
+    "F0 7F 7F 06 48 01 05 F7",
+    0
+   ]
+  ],
+  "mmc step reverse": [
+   [
+    "F0 7F 7F 06 48 01 7F F7",
+    0
+   ]
+  ],
+  "mmc stop": [
+   [
+    "F0 7F 7F 06 01 F7",
+    0
+   ]
+  ],
+  "mmc stop device_id": [
+   [
+    "F0 7F 02 06 01 F7",
+    0
+   ]
+  ],
+  "mmc subtract": [
+   [
+    "F0 7F 7F 06 4E 03 09 09 0F F7",
+    0
+   ]
+  ],
+  "mmc update begin": [
+   [
+    "F0 7F 7F 06 43 03 00 08 62 F7",
+    0
+   ]
+  ],
+  "mmc update end": [
+   [
+    "F0 7F 7F 06 43 02 01 08 F7",
+    0
+   ]
+  ],
+  "mmc update end all": [
+   [
+    "F0 7F 7F 06 43 02 01 7F F7",
+    0
+   ]
+  ],
+  "mmc update short field": [
+   [
+    "F0 7F 7F 06 43 03 00 21 48 F7",
+    0
+   ]
+  ],
+  "mmc variable_play speed 0": [
+   [
+    "F0 7F 7F 06 45 03 00 00 00 F7",
+    0
+   ]
+  ],
+  "mmc variable_play speed 0.5 rev": [
+   [
+    "F0 7F 7F 06 45 03 40 40 00 F7",
+    0
+   ]
+  ],
+  "mmc variable_play speed 1.0": [
+   [
+    "F0 7F 7F 06 45 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "mmc variable_play speed 100.25": [
+   [
+    "F0 7F 7F 06 45 03 26 22 00 F7",
+    0
+   ]
+  ],
+  "mmc wait": [
+   [
+    "F0 7F 7F 06 7C F7",
+    0
+   ]
+  ],
+  "mmc write": [
+   [
+    "F0 7F 7F 06 40 0C 08 61 25 34 10 0C 06 00 40 41 62 48 F7",
+    0
+   ]
+  ],
+  "mmc write byte fields": [
+   [
+    "F0 7F 7F 06 40 0F 4A 01 01 5A 01 01 54 01 32 56 01 7F 45 01 20 F7",
+    0
+   ]
+  ],
+  "mmc write generator_userbits": [
+   [
+    "F0 7F 7F 06 40 0B 5D 09 0C 04 05 04 05 04 02 05 01 F7",
+    0
+   ]
+  ],
+  "mmc write set-ups": [
+   [
+    "F0 7F 7F 06 40 09 5C 03 12 02 01 5F 02 11 06 F7",
+    0
+   ]
+  ],
+  "mmc write time code and byte field": [
+   [
+    "F0 7F 7F 06 40 09 09 01 25 34 10 00 4C 01 04 F7",
+    0
+   ]
+  ],
+  "mmc write track bitmaps": [
+   [
+    "F0 7F 7F 06 40 0B 62 03 61 40 01 4F 02 20 01 53 00 F7",
+    0
+   ]
+  ],
+  "mmc write vitc and update rate": [
+   [
+    "F0 7F 7F 06 40 08 63 03 01 10 7F 41 01 02 F7",
+    0
+   ]
+  ],
+  "msc 2pc computed checksum, cancelled": [
+   [
+    "F0 7F 7F 02 01 25 64 0A 02 40 07 00 F7",
+    0
+   ]
+  ],
+  "msc 2pc computed checksum, standing_by": [
+   [
+    "F0 7F 7F 02 10 21 14 40 02 00 21 25 34 10 00 34 2E 35 F7",
+    0
+   ]
+  ],
+  "msc abort manual override in progress": [
+   [
+    "F0 7F 7F 02 01 26 01 00 0C 40 07 00 F7",
+    0
+   ]
+  ],
+  "msc abort named": [
+   [
+    "F0 7F 7F 02 50 26 01 00 10 40 07 00 F7",
+    0
+   ]
+  ],
+  "msc abort numeric dependent status": [
+   [
+    "F0 7F 7F 02 10 26 02 00 02 08 08 00 F7",
+    0
+   ]
+  ],
+  "msc all_off": [
+   [
+    "F0 7F 7F 02 01 08 F7",
+    0
+   ]
+  ],
+  "msc cancel": [
+   [
+    "F0 7F 7F 02 10 24 08 00 0B 00 31 30 39 00 31 00 32 F7",
+    0
+   ]
+  ],
+  "msc cancelled manual override": [
+   [
+    "F0 7F 7F 02 10 25 09 00 0A 40 0B 00 F7",
+    0
+   ]
+  ],
+  "msc cancelled named": [
+   [
+    "F0 7F 7F 02 10 25 09 00 01 40 0B 00 F7",
+    0
+   ]
+  ],
+  "msc close_cue_list": [
+   [
+    "F0 7F 7F 02 10 1C 34 F7",
+    0
+   ]
+  ],
+  "msc close_cue_path": [
+   [
+    "F0 7F 7F 02 10 1E 35 39 F7",
+    0
+   ]
+  ],
+  "msc command_format_raw": [
+   [
+    "F0 7F 03 02 11 02 F7",
+    0
+   ]
+  ],
+  "msc complete": [
+   [
+    "F0 7F 7F 02 10 23 07 00 0A 00 F7",
+    0
+   ]
+  ],
+  "msc fire": [
+   [
+    "F0 7F 7F 02 60 07 64 F7",
+    0
+   ]
+  ],
+  "msc format process_control": [
+   [
+    "F0 7F 7F 02 50 01 F7",
+    0
+   ]
+  ],
+  "msc format projection": [
+   [
+    "F0 7F 7F 02 40 01 F7",
+    0
+   ]
+  ],
+  "msc go": [
+   [
+    "F0 7F 7F 02 01 01 F7",
+    0
+   ]
+  ],
+  "msc go cue list path": [
+   [
+    "F0 7F 7F 02 10 01 32 33 35 2E 36 00 33 36 2E 36 00 35 39 F7",
+    0
+   ]
+  ],
+  "msc go cue number": [
+   [
+    "F0 7F 7F 02 7F 01 31 F7",
+    0
+   ]
+  ],
+  "msc go_2pc": [
+   [
+    "F0 7F 7F 02 10 22 2C 02 0A 00 00 00 00 7F 31 30 39 F7",
+    0
+   ]
+  ],
+  "msc go_off": [
+   [
+    "F0 7F 7F 02 01 0B F7",
+    0
+   ]
+  ],
+  "msc load": [
+   [
+    "F0 7F 7F 02 30 05 31 32 00 33 F7",
+    0
+   ]
+  ],
+  "msc mtc_chase_off": [
+   [
+    "F0 7F 7F 02 10 1A F7",
+    0
+   ]
+  ],
+  "msc mtc_chase_on": [
+   [
+    "F0 7F 7F 02 10 19 F7",
+    0
+   ]
+  ],
+  "msc open_cue_list": [
+   [
+    "F0 7F 7F 02 10 1B 34 F7",
+    0
+   ]
+  ],
+  "msc open_cue_path": [
+   [
+    "F0 7F 7F 02 10 1D 35 39 F7",
+    0
+   ]
+  ],
+  "msc reset": [
+   [
+    "F0 7F 7F 02 01 0A F7",
+    0
+   ]
+  ],
+  "msc restore": [
+   [
+    "F0 7F 7F 02 01 09 F7",
+    0
+   ]
+  ],
+  "msc resume": [
+   [
+    "F0 7F 7F 02 01 03 F7",
+    0
+   ]
+  ],
+  "msc sequence_minus": [
+   [
+    "F0 7F 7F 02 10 14 F7",
+    0
+   ]
+  ],
+  "msc sequence_plus": [
+   [
+    "F0 7F 7F 02 10 13 F7",
+    0
+   ]
+  ],
+  "msc set": [
+   [
+    "F0 7F 7F 02 01 06 2C 02 00 7D F7",
+    0
+   ]
+  ],
+  "msc set with time": [
+   [
+    "F0 7F 7F 02 01 06 01 00 02 00 21 25 34 10 05 F7",
+    0
+   ]
+  ],
+  "msc set_clock": [
+   [
+    "F0 7F 7F 02 10 18 61 25 34 10 00 F7",
+    0
+   ]
+  ],
+  "msc set_clock q_list": [
+   [
+    "F0 7F 7F 02 10 18 21 25 34 10 07 31 32 2E 35 F7",
+    0
+   ]
+  ],
+  "msc standby": [
+   [
+    "F0 7F 7F 02 20 20 34 24 01 00 01 02 03 04 33 34 00 32 F7",
+    0
+   ]
+  ],
+  "msc standby default cue_data": [
+   [
+    "F0 7F 7F 02 01 20 00 00 7F 7F 00 00 00 00 31 31 38 2E 31 F7",
+    0
+   ]
+  ],
+  "msc standby_minus": [
+   [
+    "F0 7F 7F 02 10 12 F7",
+    0
+   ]
+  ],
+  "msc standby_plus": [
+   [
+    "F0 7F 7F 02 10 11 F7",
+    0
+   ]
+  ],
+  "msc standby_plus q_list": [
+   [
+    "F0 7F 7F 02 10 11 33 F7",
+    0
+   ]
+  ],
+  "msc standing_by": [
+   [
+    "F0 7F 7F 02 20 21 05 00 01 00 60 00 14 00 00 F7",
+    0
+   ]
+  ],
+  "msc standing_by with cue": [
+   [
+    "F0 7F 7F 02 20 21 05 00 01 00 21 25 34 10 01 33 34 F7",
+    0
+   ]
+  ],
+  "msc start_clock": [
+   [
+    "F0 7F 7F 02 10 15 F7",
+    0
+   ]
+  ],
+  "msc stop": [
+   [
+    "F0 7F 7F 02 01 02 F7",
+    0
+   ]
+  ],
+  "msc stop_clock": [
+   [
+    "F0 7F 7F 02 10 16 F7",
+    0
+   ]
+  ],
+  "msc timed_go": [
+   [
+    "F0 7F 7F 02 20 04 61 25 34 10 28 37 F7",
+    0
+   ]
+  ],
+  "msc zero_clock": [
+   [
+    "F0 7F 7F 02 10 17 F7",
+    0
+   ]
+  ],
+  "mtc_cueing cue_point": [
+   [
+    "F0 7F 7F 05 0B 2C 02 F7",
+    0
+   ]
+  ],
+  "mtc_cueing cue_point_with_info bytes": [
+   [
+    "F0 7F 7F 05 0C 02 00 01 09 06 04 0F 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing cue_point_with_info message": [
+   [
+    "F0 7F 7F 05 0C 01 00 01 09 06 04 0F 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing event_name": [
+   [
+    "F0 7F 7F 05 0E 04 00 08 04 09 06 04 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing event_start": [
+   [
+    "F0 7F 7F 05 05 2C 02 F7",
+    0
+   ]
+  ],
+  "mtc_cueing event_start_with_info message": [
+   [
+    "F0 7F 7F 05 07 01 00 01 09 06 04 0F 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing event_stop": [
+   [
+    "F0 7F 7F 05 06 2C 02 F7",
+    0
+   ]
+  ],
+  "mtc_cueing event_stop_with_info message": [
+   [
+    "F0 7F 7F 05 08 01 00 01 09 06 04 0F 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing punch_in": [
+   [
+    "F0 7F 7F 05 01 2C 02 F7",
+    0
+   ]
+  ],
+  "mtc_cueing punch_out": [
+   [
+    "F0 7F 7F 05 02 2C 02 F7",
+    0
+   ]
+  ],
+  "mtc_cueing special_system_stop": [
+   [
+    "F0 7F 7F 05 00 04 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt cue_point": [
+   [
+    "F0 7E 7F 04 0B 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt cue_point_with_info": [
+   [
+    "F0 7E 7F 04 0C 01 25 34 10 01 05 00 00 0B 07 00 04 06 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt delete_cue_point": [
+   [
+    "F0 7E 7F 04 0D 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt delete_event_start": [
+   [
+    "F0 7E 7F 04 09 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt delete_event_stop": [
+   [
+    "F0 7E 7F 04 0A 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt delete_punch_in": [
+   [
+    "F0 7E 7F 04 03 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt delete_punch_out": [
+   [
+    "F0 7E 7F 04 04 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt event_name": [
+   [
+    "F0 7E 7F 04 0E 21 25 34 10 00 06 00 09 04 0E 06 04 07 02 07 0F 06 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt event_start": [
+   [
+    "F0 7E 7F 04 05 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt event_start_with_info": [
+   [
+    "F0 7E 7F 04 07 01 25 34 10 01 05 00 00 0B 07 00 04 06 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt event_stop": [
+   [
+    "F0 7E 7F 04 06 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt event_stop_with_info": [
+   [
+    "F0 7E 7F 04 08 01 25 34 10 01 05 00 00 0B 07 00 04 06 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt punch_in": [
+   [
+    "F0 7E 7F 04 01 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt punch_out": [
+   [
+    "F0 7E 7F 04 02 41 25 34 10 00 68 07 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_clear_event_list": [
+   [
+    "F0 7E 7F 04 00 00 00 00 00 00 03 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_disable_event_list": [
+   [
+    "F0 7E 7F 04 00 00 00 00 00 00 02 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_enable_event_list": [
+   [
+    "F0 7E 7F 04 00 00 00 00 00 00 01 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_event_list_request": [
+   [
+    "F0 7E 7F 04 00 21 25 34 10 14 05 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_system_stop": [
+   [
+    "F0 7E 7F 04 00 00 00 00 00 00 04 00 F7",
+    0
+   ]
+  ],
+  "mtc_cueing_nrt special_time_code_offset": [
+   [
+    "F0 7E 7F 04 00 21 25 34 10 14 00 00 F7",
+    0
+   ]
+  ],
+  "mtc_full 24": [
+   [
+    "F0 7F 7F 01 01 01 25 34 10 F7",
+    0
+   ]
+  ],
+  "mtc_full 25": [
+   [
+    "F0 7F 7F 01 01 21 25 34 10 F7",
+    0
+   ]
+  ],
+  "mtc_full 30drop": [
+   [
+    "F0 7F 7F 01 01 41 25 34 10 F7",
+    0
+   ]
+  ],
+  "mtc_full 30nondrop": [
+   [
+    "F0 7F 7F 01 01 61 25 34 10 F7",
+    0
+   ]
+  ],
+  "mtc_full device_id": [
+   [
+    "F0 7F 05 01 01 21 25 34 10 F7",
+    0
+   ]
+  ],
+  "mtc_nak": [
+   [
+    "F0 7E 7F 7E 00 F7",
+    0
+   ]
+  ],
+  "mtc_nak device packet": [
+   [
+    "F0 7E 03 7E 09 F7",
+    0
+   ]
+  ],
+  "mtc_quarter_frame_sequence forward": [
+   [
+    "F1 00",
+    0
+   ],
+   [
+    "F1 11",
+    0
+   ],
+   [
+    "F1 24",
+    0
+   ],
+   [
+    "F1 33",
+    0
+   ],
+   [
+    "F1 45",
+    0
+   ],
+   [
+    "F1 52",
+    0
+   ],
+   [
+    "F1 61",
+    0
+   ],
+   [
+    "F1 76",
+    0
+   ]
+  ],
+  "mtc_quarter_frame_sequence reverse": [
+   [
+    "F1 76",
+    12
+   ],
+   [
+    "F1 61",
+    0
+   ],
+   [
+    "F1 52",
+    0
+   ],
+   [
+    "F1 45",
+    0
+   ],
+   [
+    "F1 33",
+    0
+   ],
+   [
+    "F1 24",
+    0
+   ],
+   [
+    "F1 11",
+    0
+   ],
+   [
+    "F1 00",
+    0
+   ]
+  ],
+  "mtc_user_bits binary_groups": [
+   [
+    "F0 7F 7F 01 02 06 01 02 05 03 00 01 00 02 F7",
+    0
+   ]
+  ],
+  "mtc_user_bits characters": [
+   [
+    "F0 7F 03 01 02 0C 04 05 04 05 04 02 05 00 F7",
+    0
+   ]
+  ],
+  "notation bar_marker -8192": [
+   [
+    "F0 7F 7F 03 01 00 40 F7",
+    0
+   ]
+  ],
+  "notation bar_marker 0": [
+   [
+    "F0 7F 7F 03 01 00 00 F7",
+    0
+   ]
+  ],
+  "notation bar_marker 1": [
+   [
+    "F0 7F 7F 03 01 01 00 F7",
+    0
+   ]
+  ],
+  "notation bar_marker 8191": [
+   [
+    "F0 7F 7F 03 01 7F 3F F7",
+    0
+   ]
+  ],
+  "notation time_signature_delayed compound": [
+   [
+    "F0 7F 7F 03 42 08 03 02 18 08 02 03 05 04 F7",
+    0
+   ]
+  ],
+  "notation time_signature_immediate": [
+   [
+    "F0 7F 7F 03 02 04 06 03 24 08 F7",
+    0
+   ]
+  ],
+  "note_off": [
+   [
+    "8F 3C 28",
+    0
+   ]
+  ],
+  "note_off default velocity": [
+   [
+    "80 3C 00",
+    0
+   ]
+  ],
+  "note_on": [
+   [
+    "93 3C 64",
+    0
+   ]
+  ],
+  "note_on default velocity": [
+   [
+    "90 3D 40",
+    0
+   ]
+  ],
+  "note_on with time": [
+   [
+    "90 3E 01",
+    480
+   ]
+  ],
+  "nrpn": [
+   [
+    "BF 62 34",
+    0
+   ],
+   [
+    "BF 63 24",
+    0
+   ],
+   [
+    "BF 06 7F",
+    0
+   ],
+   [
+    "BF 26 7F",
+    0
+   ]
+  ],
+  "nrpn msb_only": [
+   [
+    "B0 62 01",
+    0
+   ],
+   [
+    "B0 63 00",
+    0
+   ],
+   [
+    "B0 06 7F",
+    0
+   ]
+  ],
+  "pitchwheel default": [
+   [
+    "E0 00 40",
+    0
+   ]
+  ],
+  "pitchwheel max": [
+   [
+    "E0 7F 7F",
+    0
+   ]
+  ],
+  "pitchwheel min": [
+   [
+    "E0 00 00",
+    0
+   ]
+  ],
+  "polytouch": [
+   [
+    "A2 40 21",
+    0
+   ]
+  ],
+  "program_change": [
+   [
+    "C9 7F",
+    0
+   ]
+  ],
+  "quarter_frame": [
+   [
+    "F1 76",
+    0
+   ]
+  ],
+  "reset": [
+   [
+    "FF",
+    0
+   ]
+  ],
+  "rpn coarse_tuning": [
+   [
+    "B1 64 02",
+    0
+   ],
+   [
+    "B1 65 00",
+    0
+   ],
+   [
+    "B1 06 02",
+    0
+   ],
+   [
+    "B1 26 2C",
+    0
+   ]
+  ],
+  "rpn fine_tuning": [
+   [
+    "B1 64 01",
+    0
+   ],
+   [
+    "B1 65 00",
+    0
+   ],
+   [
+    "B1 06 02",
+    0
+   ],
+   [
+    "B1 26 2C",
+    0
+   ]
+  ],
+  "rpn modulation_depth_range": [
+   [
+    "B0 64 05",
+    0
+   ],
+   [
+    "B0 65 00",
+    0
+   ],
+   [
+    "B0 06 00",
+    0
+   ],
+   [
+    "B0 26 40",
+    0
+   ]
+  ],
+  "rpn mpe_configuration": [
+   [
+    "B0 64 06",
+    0
+   ],
+   [
+    "B0 65 00",
+    0
+   ],
+   [
+    "B0 06 07",
+    0
+   ]
+  ],
+  "rpn null": [
+   [
+    "B3 64 7F",
+    0
+   ],
+   [
+    "B3 65 7F",
+    0
+   ]
+  ],
+  "rpn parameter_number": [
+   [
+    "B0 64 05",
+    3
+   ],
+   [
+    "B0 65 00",
+    0
+   ],
+   [
+    "B0 06 40",
+    0
+   ]
+  ],
+  "rpn pitch_bend_sensitivity": [
+   [
+    "B1 64 00",
+    0
+   ],
+   [
+    "B1 65 00",
+    0
+   ],
+   [
+    "B1 06 02",
+    0
+   ],
+   [
+    "B1 26 2C",
+    0
+   ]
+  ],
+  "rpn tuning_bank_select": [
+   [
+    "B1 64 04",
+    0
+   ],
+   [
+    "B1 65 00",
+    0
+   ],
+   [
+    "B1 06 02",
+    0
+   ],
+   [
+    "B1 26 2C",
+    0
+   ]
+  ],
+  "rpn tuning_program_select": [
+   [
+    "B1 64 03",
+    0
+   ],
+   [
+    "B1 65 00",
+    0
+   ],
+   [
+    "B1 06 02",
+    0
+   ],
+   [
+    "B1 26 2C",
+    0
+   ]
+  ],
+  "sample_dump data_packet raw data": [
+   [
+    "F0 7E 7F 02 09 00 07 0E 15 1C 23 2A 31 38 3F 46 4D 54 5B 62 69 70 77 7E 05 0C 13 1A 21 28 2F 36 3D 44 4B 52 59 60 67 6E 75 7C 03 0A 11 18 1F 26 2D 34 3B 42 49 50 57 5E 65 6C 73 7A 01 08 0F 16 1D 24 2B 32 39 40 47 4E 55 5C 63 6A 71 78 7F 06 0D 14 1B 22 29 30 37 3E 45 4C 53 5A 61 68 6F 76 7D 04 0B 12 19 20 27 2E 35 3C 43 4A 51 58 5F 66 6D 74 7B 02 09 10 17 1E 25 2C 33 3A 41 02 F7",
+    0
+   ]
+  ],
+  "sample_dump data_packet words 12-bit": [
+   [
+    "F0 7E 7F 02 00 7F 7C 00 00 40 00 09 0C 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 45 F7",
+    0
+   ]
+  ],
+  "sample_dump data_packet words 24-bit": [
+   [
+    "F0 7E 7F 02 7F 00 00 00 00 04 22 11 10 08 44 22 20 0C 66 33 30 11 08 44 40 15 2A 55 50 19 4C 66 60 1D 6E 77 70 22 11 09 00 26 33 1A 10 2A 55 2B 20 2E 77 3C 30 33 19 4D 40 37 3B 5E 50 3B 5D 6F 60 40 00 00 70 44 22 12 00 48 44 23 10 4C 66 34 20 51 08 45 30 55 2A 56 40 59 4C 67 50 5D 6E 78 60 62 11 09 70 66 33 1B 00 6A 55 2C 10 6E 77 3D 20 73 19 4E 30 77 3B 5F 40 7B 5D 70 50 3F F7",
+    0
+   ]
+  ],
+  "sample_dump header": [
+   [
+    "F0 7E 7F 01 2C 02 10 14 31 01 20 0D 06 68 07 00 38 05 06 00 F7",
+    0
+   ]
+  ],
+  "sample_dump loop_points": [
+   [
+    "F0 7E 7F 05 01 01 00 02 00 01 0A 00 00 20 1C 01 F7",
+    0
+   ]
+  ],
+  "sample_dump loop_points delete all": [
+   [
+    "F0 7E 7F 05 01 01 00 7F 7F 7F 00 00 00 00 00 00 F7",
+    0
+   ]
+  ],
+  "sample_dump loop_points_request all": [
+   [
+    "F0 7E 7F 05 02 7F 7F 7F 7F F7",
+    0
+   ]
+  ],
+  "sample_dump request": [
+   [
+    "F0 7E 01 03 05 00 F7",
+    0
+   ]
+  ],
+  "song_select": [
+   [
+    "F3 05",
+    0
+   ]
+  ],
+  "songpos": [
+   [
+    "F2 7F 7F",
+    0
+   ]
+  ],
+  "songpos default": [
+   [
+    "F2 00 00",
+    0
+   ]
+  ],
+  "start": [
+   [
+    "FA",
+    0
+   ]
+  ],
+  "stop": [
+   [
+    "FC",
+    0
+   ]
+  ],
+  "sysex": [
+   [
+    "F0 41 10 42 12 7F F7",
+    0
+   ]
+  ],
+  "sysex empty": [
+   [
+    "F0 F7",
+    0
+   ]
+  ],
+  "tune_request": [
+   [
+    "F6",
+    0
+   ]
+  ]
+ },
+ "meta": {
+  "end_of_track": [
+   "FF 2F 00",
+   0
+  ],
+  "key_signature": [
+   "FF 59 02 03 01",
+   0
+  ],
+  "sequencer_specific": [
+   "FF 7F 02 41 10",
+   0
+  ],
+  "set_tempo bpm": [
+   "FF 51 03 07 A1 20",
+   0
+  ],
+  "set_tempo tempo": [
+   "FF 51 03 06 1A 80",
+   96
+  ],
+  "smpte_offset": [
+   "FF 54 05 21 02 03 04 05",
+   0
+  ],
+  "time_signature": [
+   "FF 58 04 07 03 18 08",
+   0
+  ],
+  "track_name": [
+   "FF 03 05 50 69 61 6E 6F",
+   0
+  ]
+ },
+ "mmc_responses": {
+  "command_error power-up state": {
+   "device_id": 1,
+   "error": "no_errors",
+   "error_halt": false,
+   "event_define_error": false,
+   "level": 0,
+   "name": "command_error",
+   "previously_transmitted": false,
+   "procedure_assemble_error": false,
+   "status": "ok",
+   "type": "field_value",
+   "unsolicited": false
+  },
+  "command_error with command": {
+   "command_bytes": [
+    70
+   ],
+   "device_id": 1,
+   "error": "unsupported_command",
+   "error_halt": true,
+   "event_define_error": false,
+   "level": 127,
+   "name": "command_error",
+   "offset": 0,
+   "previously_transmitted": false,
+   "procedure_assemble_error": false,
+   "status": "ok",
+   "type": "field_value",
+   "unsolicited": true
+  },
+  "err bitmap count mismatch": {
+   "error": "field 0x62 (track_mute) needs 3 data byte(s), got 1"
+  },
+  "err empty": {
+   "error": "'data' is required: a non-empty list of ints, the full sysex including the leading 0xF0 and trailing 0xF7"
+  },
+  "err extension set": {
+   "error": "MMC extension sets (00 prefix) aren't decoded"
+  },
+  "err missing F7": {
+   "error": "'data' must be a complete sysex, including the leading 0xF0 and trailing 0xF7"
+  },
+  "err not mmc response": {
+   "error": "'data' is not an MMC Response sysex \u2014 expected F0 7F <device_id> 07 ... F7"
+  },
+  "err wrong length": {
+   "error": "field 0x01 (selected_time_code) needs 5 data byte(s), got 2"
+  },
+  "event_response": {
+   "all_speeds": false,
+   "device_id": 1,
+   "direction": "both",
+   "event": 3,
+   "event_time": {
+    "blank": false,
+    "color_frame": false,
+    "frame_rate": "30nondrop",
+    "frames": 16,
+    "hours": 1,
+    "minutes": 37,
+    "negative": false,
+    "seconds": 52,
+    "subframes": 0,
+    "use_status_byte": false
+   },
+   "name": "event_response",
+   "non_delete": true,
+   "status": "ok",
+   "trigger_command": {
+    "command": "record_strobe",
+    "type": "mmc"
+   },
+   "trigger_source": "selected_time_code",
+   "type": "field_value"
+  },
+  "failure text": {
+   "device_id": 1,
+   "name": "failure",
+   "status": "ok",
+   "text": "Tape jam!",
+   "type": "field_value"
+  },
+  "fixed_speed undefined code": {
+   "device_id": 1,
+   "name": "fixed_speed",
+   "status": "ok",
+   "type": "field_value",
+   "value": 62
+  },
+  "generator_command_tally copy/jam lost source": {
+   "command": "copy_jam",
+   "device_id": 1,
+   "frame_sync_reference_lost": false,
+   "name": "generator_command_tally",
+   "source_data_lost": true,
+   "status": "ok",
+   "success": "failure",
+   "type": "field_value"
+  },
+  "generator_set_up": {
+   "copy_jam_mode": "continue",
+   "copy_jam_reference": "external",
+   "copy_jam_source": "selected_time_code",
+   "device_id": 1,
+   "name": "generator_set_up",
+   "run_reference": "internal_drop_a",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "gp0 status byte": {
+   "blank": true,
+   "color_frame": true,
+   "device_id": 1,
+   "estimated": true,
+   "frame_rate": "25",
+   "frames": 0,
+   "hours": 0,
+   "invalid": false,
+   "minutes": 0,
+   "name": "gp0",
+   "negative": true,
+   "no_time_code": true,
+   "seconds": 0,
+   "status": "ok",
+   "type": "field_value",
+   "use_status_byte": true,
+   "video_field_1": false
+  },
+  "handshake wait": {
+   "device_id": 1,
+   "name": "wait",
+   "status": "ok",
+   "type": "handshake"
+  },
+  "mtc_command_tally follow": {
+   "command": "follow",
+   "device_id": 1,
+   "name": "midi_time_code_command_tally",
+   "status": "ok",
+   "success": "successful",
+   "type": "field_value"
+  },
+  "mtc_set_up": {
+   "device_id": 1,
+   "fast_full_messages": false,
+   "mute_on_response_cable": false,
+   "name": "midi_time_code_set_up",
+   "source": "generator_time_code",
+   "status": "ok",
+   "stopped_full_messages": false,
+   "transmit_userbits": true,
+   "transmit_while_fast": true,
+   "transmit_while_stopped": true,
+   "type": "field_value"
+  },
+  "procedure_response": {
+   "commands": [
+    {
+     "command": "stop",
+     "type": "mmc"
+    },
+    {
+     "command": "locate",
+     "frame_rate": "30nondrop",
+     "frames": 16,
+     "hours": 1,
+     "minutes": 37,
+     "seconds": 52,
+     "subframes": 0,
+     "type": "mmc"
+    }
+   ],
+   "device_id": 1,
+   "name": "procedure_response",
+   "procedure": 2,
+   "status": "ok",
+   "type": "field_value"
+  },
+  "procedure_response invalid": {
+   "device_id": 1,
+   "name": "procedure_response",
+   "procedure": "invalid",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "record_status bits": {
+   "activity": "record_insert",
+   "device_id": 1,
+   "local_record_inhibit": true,
+   "local_rehearse_inhibit": false,
+   "name": "record_status",
+   "no_tracks_active": true,
+   "status": "ok",
+   "type": "field_value"
+  },
+  "response_error": {
+   "device_id": 1,
+   "status": "ok",
+   "type": "response_error",
+   "unsupported_fields": [
+    "selected_time_code",
+    "record_mode"
+   ]
+  },
+  "response_segment first of two": {
+   "data": [
+    1,
+    96,
+    22
+   ],
+   "device_id": 1,
+   "first": true,
+   "remaining": 1,
+   "status": "ok",
+   "type": "response_segment"
+  },
+  "rp013 appendix signature": {
+   "command_bitmaps": [
+    127,
+    113,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    61,
+    96,
+    127,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    9
+   ],
+   "commands": [
+    "extension",
+    "stop",
+    "play",
+    "deferred_play",
+    "fast_forward",
+    "rewind",
+    "record_strobe",
+    "record_exit",
+    "chase",
+    "command_error_reset",
+    "mmc_reset",
+    "write",
+    "read",
+    "update",
+    "locate",
+    "variable_play",
+    "move",
+    "add",
+    "subtract",
+    "drop_frame_adjust",
+    "procedure",
+    "event",
+    "group",
+    "command_segment",
+    "deferred_variable_play",
+    "wait",
+    "resume"
+   ],
+   "device_id": 1,
+   "extended_commands": [],
+   "extended_fields": [],
+   "field_bitmaps": [
+    62,
+    30,
+    0,
+    0,
+    0,
+    62,
+    30,
+    0,
+    0,
+    0,
+    63,
+    98,
+    0,
+    56,
+    0,
+    51,
+    0,
+    0,
+    0,
+    9
+   ],
+   "fields": [
+    "selected_time_code",
+    "selected_master_code",
+    "requested_offset",
+    "actual_offset",
+    "lock_deviation",
+    "gp0",
+    "gp1",
+    "gp2",
+    "gp3",
+    "short_selected_time_code",
+    "short_selected_master_code",
+    "short_requested_offset",
+    "short_actual_offset",
+    "short_lock_deviation",
+    "short_gp0",
+    "short_gp1",
+    "short_gp2",
+    "short_gp3",
+    "signature",
+    "update_rate",
+    "response_error",
+    "command_error",
+    "command_error_level",
+    "time_standard",
+    "motion_control_tally",
+    "record_mode",
+    "record_status",
+    "control_disable",
+    "resolved_play_mode",
+    "chase_mode",
+    "procedure_response",
+    "event_response",
+    "response_segment",
+    "failure",
+    "wait",
+    "resume"
+   ],
+   "name": "signature",
+   "status": "ok",
+   "type": "field_value",
+   "version": "1.00",
+   "version_extension": [
+    0,
+    0
+   ]
+  },
+  "rp013 master: short selected time code": {
+   "device_id": 1,
+   "estimated": false,
+   "frames": 13,
+   "invalid": false,
+   "name": "short_selected_time_code",
+   "negative": false,
+   "no_time_code": false,
+   "status": "ok",
+   "type": "field_value",
+   "use_status_byte": true,
+   "video_field_1": false
+  },
+  "rp013 master: time code + motion control tally": {
+   "device_id": 1,
+   "fields": [
+    {
+     "blank": false,
+     "color_frame": false,
+     "estimated": false,
+     "frame_rate": "30nondrop",
+     "frames": 12,
+     "hours": 0,
+     "invalid": false,
+     "minutes": 22,
+     "name": "selected_time_code",
+     "negative": false,
+     "no_time_code": false,
+     "seconds": 5,
+     "type": "field_value",
+     "use_status_byte": true,
+     "video_field_1": false
+    },
+    {
+     "motion_process": "none",
+     "motion_process_success": 0,
+     "motion_state": "play",
+     "motion_state_success": "requested_motion_achieved",
+     "name": "motion_control_tally",
+     "type": "field_value"
+    }
+   ],
+   "status": "ok",
+   "type": "fields"
+  },
+  "rp013 slave: selected time code": {
+   "blank": false,
+   "color_frame": false,
+   "device_id": 2,
+   "estimated": false,
+   "frame_rate": "30nondrop",
+   "frames": 28,
+   "hours": 10,
+   "invalid": false,
+   "minutes": 1,
+   "name": "selected_time_code",
+   "negative": false,
+   "no_time_code": false,
+   "seconds": 58,
+   "status": "ok",
+   "type": "field_value",
+   "use_status_byte": true,
+   "video_field_1": false
+  },
+  "selected_time_code": {
+   "blank": false,
+   "color_frame": false,
+   "device_id": 1,
+   "frame_rate": "30nondrop",
+   "frames": 16,
+   "hours": 1,
+   "minutes": 37,
+   "name": "selected_time_code",
+   "negative": false,
+   "seconds": 52,
+   "status": "ok",
+   "subframes": 0,
+   "type": "field_value",
+   "use_status_byte": false
+  },
+  "selected_time_code_userbits": {
+   "binary_groups": [
+    12,
+    4,
+    5,
+    4,
+    5,
+    4,
+    2,
+    5
+   ],
+   "device_id": 1,
+   "flags": 1,
+   "name": "selected_time_code_userbits",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "stop_mode enable": {
+   "device_id": 1,
+   "name": "stop_mode",
+   "status": "ok",
+   "type": "field_value",
+   "value": "enable_monitoring"
+  },
+  "stop_mode wrong length": {
+   "data": [
+    1,
+    1
+   ],
+   "device_id": 1,
+   "name": "stop_mode",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "time_standard field-definition form": {
+   "device_id": 1,
+   "frame_rate": "30nondrop",
+   "name": "time_standard",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "time_standard unshifted form": {
+   "device_id": 1,
+   "encoding": "unshifted",
+   "frame_rate": "30nondrop",
+   "name": "time_standard",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "time_standard with count 0": {
+   "data": [],
+   "device_id": 1,
+   "name": "time_standard",
+   "status": "ok",
+   "type": "field_value"
+  },
+  "track_mute bitmap": {
+   "active_tracks": [
+    9
+   ],
+   "aux_track_a": false,
+   "aux_track_b": false,
+   "bitmap_bytes": [
+    5,
+    64
+   ],
+   "byte_count": 2,
+   "device_id": 127,
+   "name": "track_mute",
+   "status": "ok",
+   "time_code_track": true,
+   "type": "field_value",
+   "video": true
+  },
+  "unregistered 5-byte name": {
+   "data": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "device_id": 1,
+   "note": "not a registered Information Field",
+   "raw_name_byte": 16,
+   "status": "ok",
+   "type": "unknown"
+  },
+  "velocity_tally reverse half speed": {
+   "device_id": 1,
+   "name": "velocity_tally",
+   "reverse": true,
+   "speed": 0.5,
+   "status": "ok",
+   "type": "field_value"
+  },
+  "vitc_insert_enable": {
+   "control": "enable",
+   "device_id": 1,
+   "first_line": 16,
+   "name": "vitc_insert_enable",
+   "second_line": 18,
+   "status": "ok",
+   "type": "field_value"
+  }
+ }
+}
