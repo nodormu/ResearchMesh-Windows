@@ -336,7 +336,7 @@ Request flow: **CLI input → Chat.run() agentic loop → Claude API + (local to
   30, a hard cap) all come from `[listen]`, re-read fresh per call.
 
 - **`core/midi1.py`** — `midi1`: MIDI 1.0 device I/O, building and decoding every MIDI 1.0 message, and `.mid`/`.syx` files.
-  - **Origin:** it's the same file as the Linux and macOS clients' (branch `midi1-shared-layer-and-decoding`, 2026-10-02). `_PORT_BACKEND` is "alsa" on Linux and "rtmidi" here: `_RtMidiInput`/`_RtMidiOutput` open python-rtmidi's MidiIn/MidiOut over **WinMM**. The ALSA code is only used on Linux. `MIDI1_PORT_BACKEND=rtmidi` forces the rtmidi path on Linux, which is how it was tested there.
+  - **Origin:** it's the same file as the Linux and macOS clients' (their `main`, 2026-10-02). `_PORT_BACKEND` is "alsa" on Linux and "rtmidi" here: `_RtMidiInput`/`_RtMidiOutput` open python-rtmidi's MidiIn/MidiOut over **WinMM**. The ALSA code is only used on Linux. `MIDI1_PORT_BACKEND=rtmidi` forces the rtmidi path on Linux, which is how it was tested there.
   - **Receiving:** `open` with `active_sensing: true` passes Active Sensing to `poll`. `poll` entries carry `received_at`, `decoded`, `completes` (RPN/NRPN, Quarter Frame and MMC segment reassembly) and `at_open` (the burst that arrives as an input opens).
   - **Field docs:** the `describe` action documents every message type's fields with an example.
   - **Timeouts:** every hardware-touching call runs under `asyncio.wait_for(asyncio.to_thread(...))`, so a hung driver can't block the caller forever. It can't kill the stuck thread, which is why `poll`'s `timeout_seconds` is capped at 60 s.
