@@ -42,7 +42,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**24 local tools**, plus whatever your MCP servers expose:
+**25 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -52,7 +52,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
 | `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#good-to-know)) |
-| `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` | Headless [Playwright](https://playwright.dev/) — real DOM surfing: renders JavaScript, follows links, fills forms |
+| `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` · `_tab` | [Playwright](https://playwright.dev/) DOM browsing: renders JavaScript, follows links and new tabs, fills forms, saves downloads to `~/Downloads`. `_navigate` takes `mode` and `profile` ([see below](#browser-modes)); `_tab` lists, switches and closes tabs; `_fill` takes a `gopass` vault entry (`value_secret`) without the value appearing in the conversation, or `submit` to press Enter afterwards |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
 | `python` | Persistent IPython kernel — **variables survive between calls** |
 | `interactive_run` | Commands that prompt: passwords, `[y/N]`, ssh host keys, winget and other installers, REPLs |
@@ -72,6 +72,18 @@ records a window from your microphone, transcribes it, and auto-submits the tran
 your next turn — both reuse the same `speak`/`listen` tool code, just invoked directly from
 the REPL instead of by Claude.
 
+### Browser modes
+
+`browser_navigate` takes `mode` and `profile`:
+
+- `headless` (default): no window. Uses installed Google Chrome if present, else the bundled Chromium.
+- `headed`: a visible window on your desktop. `headed: true` is an alias.
+- `virtual`: the same installed Chrome as `real`, started on a hidden desktop of its own and attached over CDP, so no window appears on yours. It needs Google Chrome installed. This mode has not been driven on a real Windows desktop; if Chrome cannot start there, a stopped visit keeps its headless report.
+- `real`: your installed Chrome, started as a normal program and attached over CDP. It is the least detectable mode and opens a window you can click in. The client closes it on exit. It needs Google Chrome in Program Files or `%LOCALAPPDATA%`.
+- `profile` names a persistent profile (1-40 letters, digits, `-`, `_`) so cookies and logins survive restarts. Profiles live under `%LOCALAPPDATA%\researchmesh\browser-profiles`, inside your own profile folder. Without one, the session's profile is deleted when it closes. Changing mode or profile restarts the browser.
+- A report carries a `Human check:` line when a Cloudflare check appears. A fresh visit with no `mode` or `profile` that a check stops is reopened once in `virtual` mode; if the line still says pending, use `real` or click the check yourself.
+- Downloads are saved to `~/Downloads` (`RESEARCHMESH_DOWNLOAD_DIR` overrides) under a unique name, so an existing file is never overwritten, and are listed as `Downloaded:` lines in the result.
+
 ## Good to know
 
 - **There is no approval prompt.** Claude runs the commands and file edits it decides on, as
@@ -84,7 +96,7 @@ the REPL instead of by Claude.
   systems everyone else's work goes through — a CRM/CMDB (ServiceNow, ConnectWise,
   whatever the organization already runs) as its system of record, change tickets
   opened for anything that touches production. Those are examples, not a fixed list.
-  None of that is built into this app's 24 tools directly; it's what
+  None of that is built into this app's 25 tools directly; it's what
   [MCP, in both directions](#mcp-in-both-directions) is *for* — connect it to an
   email MCP server, a Teams/Slack one, your CMDB's — and it participates the same way
   a new hire would, through the same front doors, not a side channel. That reframes
@@ -556,7 +568,8 @@ whatever's changed since the last time it looked.
 
 `interactive_run` answers a command's prompts (ssh, a UAC-free elevated tool, anything that asks
 for a password) from a vault on your machine. The model supplies only the name of an entry; the
-value is decrypted locally and never appears in the conversation. Set up the vault once (below).
+value is decrypted locally and never appears in the conversation. `browser_fill` takes the same
+vault entries for web logins (`value_secret`). Set up the vault once (below).
 After that, whenever a command needs a credential, the agent asks you to pick from the names you
 saved.
 
@@ -580,7 +593,14 @@ entry on this machine.
 - A GPG passphrase prompt (Gpg4win's pinentry) appears on your screen, not in the conversation. If
   the key is not cached and nobody answers, `gopass show` times out after 30 s and `taskkill /T`
   ends it with every process it started; unlock the key once in your own terminal first.
+- `browser_fill` takes the same vault entries for web logins (`value_secret`) and types a confirmed
+  entry into whatever page is open. A malicious page that talks the model into filling its login
+  form receives the real value, and scrubbing does not help, because the value never returns
+  through the model. Name an entry only when you want it used, and watch which site the browser
+  is on.
 - `computer` has no vault option: type a password into a window yourself.
+- A one-time code (authenticator, SMS, email) is not a vault secret. Paste it in the chat and the
+  agent enters it at once with `browser_fill` `submit: true`.
 
 <details>
 <summary><strong>Full <code>gopass</code> vault setup, walkthrough + reference charts (click to expand)</strong></summary>
@@ -790,6 +810,7 @@ those you edit by hand.
 | `CLAUDE_SHOW_USAGE=1` | Print token and prompt-cache counts per request |
 | `CLAUDE_MEMORY_DIR` | Where `memory` stores `/memories` (default `./memories`) |
 | `CLAUDE_DISPLAY_SIZE` | Logical screen size `computer` reports, e.g. `1280x800` |
+| `RESEARCHMESH_DOWNLOAD_DIR` | Where browser downloads land. Default `~/Downloads` |
 | `CLAUDE_KERNEL_ENCRYPTION` | `auto` (default) encrypts the `python` kernel's sockets with CurveZMQ and falls back if it can't; `required` fails the tool instead of running unencrypted; `off` skips it |
 | *(embeddings server)* | Whatever `[embeddings].api_key_env` names, if your server needs auth |
 | *(vision server)* | Whatever `[vision].api_key_env` names, if your server needs auth |
@@ -803,7 +824,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            24 local tools           [mcp] in config.toml
+     mcp_server.py            25 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
