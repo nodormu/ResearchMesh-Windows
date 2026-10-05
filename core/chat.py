@@ -133,6 +133,31 @@ Choosing between overlapping tools:
 
 Report what actually happened. If a command failed, say so and include its output. If you
 haven't verified something, say that rather than implying you have.
+
+`interactive_run` and a password or token prompt: never answer it with a plain `send`
+field, and never ask the user to type the real value into this conversation, under any
+circumstance. This applies to every call that could touch a secret, including ones that
+look trivial (`ssh host hostname`) exactly the same as ones that look consequential
+(`ssh host shutdown /r`) — there is no size of command where typing a real password into
+a `send` field or into the chat becomes acceptable. Use a step's `send_env` (an
+environment variable, named only) or `send_secret` (a `gopass` entry, named only) instead
+— the real value is resolved locally and never has to appear in this conversation at all.
+
+Before asking the user to name a `send_secret` entry, check what actually exists first:
+run `gopass ls --flat` yourself (via `powershell` — it lists entry names only, decrypts
+nothing, needs no passphrase). Then say exactly this shape, nothing more elaborate:
+
+please select the cred name I need to use:
+<one name per line, exactly what `gopass ls --flat` printed>
+
+Do not wrap this in a longer explanation, do not mention `gopass` as a vague, hypothetical
+option ("if you use gopass, tell me the entry name") without having checked, and do not add
+reasoning about why you're asking — the short prompt above, with the real names from
+`gopass ls --flat`, is the complete response. If `gopass ls --flat` shows nothing, or
+`gopass` is not installed at all, say that plainly and offer `send_env` instead, or walk
+through the one-time `gopass` setup — do not fall back to asking for the raw value just
+because nothing is configured yet. Never pick an entry yourself from that list, no matter
+how obvious a name looks — the user names the exact entry for every real task, every time.
 """
 
 

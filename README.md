@@ -554,11 +554,33 @@ whatever's changed since the last time it looked.
 
 ### 10) interactive_run — log in without Claude ever seeing your passwords
 
-`interactive_run` can log you into things — sudo-equivalent prompts, ssh, whatever asks for a
-password — without your password, or your GPG vault passphrase, ever being seen by Claude. You
-need to set this up once (below). After that, whenever a command needs a credential, you get a
-list of the names you saved to pick from, so you never have to remember which one it is yourself
-either.
+`interactive_run` answers a command's prompts (ssh, a UAC-free elevated tool, anything that asks
+for a password) from a vault on your machine. The model supplies only the name of an entry; the
+value is decrypted locally and never appears in the conversation. Set up the vault once (below).
+After that, whenever a command needs a credential, the agent asks you to pick from the names you
+saved.
+
+**Name check.** An entry is decrypted only if you typed its name in one of your own messages this
+session, so the model cannot pick one on its own. When it needs a credential it lists the real
+entry names and waits for you to name one. A typed name stays confirmed for the rest of the
+session and for any use. The match is on the whole name anywhere in your message, so a passing
+mention ("push it to github" with an entry named `github`) also confirms it. A task delegated to
+this instance over MCP never counts as your message, so a delegating client cannot unlock an
+entry on this machine.
+
+**What is and is not protected:**
+
+- The value goes from `gopass show` to the child process through the console and is never in a
+  tool call. The transcript returned to the model has the value scrubbed, along with its percent,
+  form, HTML, JSON, hex and base64 encodings. A reversed or otherwise transformed copy that the
+  child prints is not caught and would reach Anthropic.
+- `send_env` takes the NAME of an environment variable and is scrubbed the same way, without
+  `gopass`.
+- Only the first line of a `gopass` entry is used.
+- A GPG passphrase prompt (Gpg4win's pinentry) appears on your screen, not in the conversation. If
+  the key is not cached and nobody answers, `gopass show` times out after 30 s and `taskkill /T`
+  ends it with every process it started; unlock the key once in your own terminal first.
+- `computer` has no vault option: type a password into a window yourself.
 
 <details>
 <summary><strong>Full <code>gopass</code> vault setup, walkthrough + reference charts (click to expand)</strong></summary>

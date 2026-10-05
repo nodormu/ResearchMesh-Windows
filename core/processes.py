@@ -98,17 +98,28 @@ to independently reason about wherever `gopass` happens to keep its store on
 a given Windows machine (its own default store location is not the fixed,
 documented `~/.password-store` convention `pass` guarantees).
 
+An entry is decrypted only if its name appears in a message the user typed
+(`note_user_message`, called from core/cli.py); a name the model picked cannot
+confirm itself, and a task delegated over MCP never reaches that call.
+
 Requires:  pip install pywinpty  (API verified against 3.0.5)
 """
 
 import asyncio
+import base64
+import contextlib
+import html
 import json
 import os
 import queue
 import re
+import signal
 import subprocess
+import sys
 import threading
 import time
+from typing import Any
+from urllib.parse import quote, quote_plus
 
 from core.output import clip, strip_ansi
 
@@ -253,13 +264,9 @@ _EXIT_GRACE = 5.0
 # it, would otherwise hang for the full interactive_run timeout).
 _SEND_SECRET_TIMEOUT = 30
 
-# Entry names that have already been explicitly presented AND re-referenced
-# once, for the life of this process — same incident/rationale as the
-# Linux/Mac originals: a direct, correct entry name must still be refused on
-# its first-ever reference, so nothing skips straight to using the sole vault
-# entry with no selection prompt at all. A module-level set, not a function
-# default, because it has to persist across separate `_run()` calls within
-# the same running process to mean anything.
+# Vault entry names the user has typed in their own messages this session (see
+# `note_user_message`). Only these can be decrypted. Module-level so it persists
+# across separate tool calls in the same process.
 _confirmed_secret_entries: set[str] = set()
 
 
@@ -311,34 +318,153 @@ def _resolve_reply(step: dict) -> tuple[str, bool, str | None]:
             return "", False, f"environment variable {var_name!r} is not set"
         return value, True, None
 
-    entry_name = str(step["send_secret"])
-    if entry_name == "?" or entry_name not in _confirmed_secret_entries:
-        # First reference to this exact name (or an explicit "?") — refuse
-        # to use it yet, REGARDLESS of whether it's real, correct, or the
-        # only entry that exists. Recording it here means the NEXT call
-        # that names this same entry is treated as the confirmed one — so
-        # a real task still only takes two calls total (present, then use),
-        # not a repeated prompt every single time the same entry comes up
-        # later in the same session.
-        _confirmed_secret_entries.add(entry_name)
-        return "", False, _select_entry_prompt()
+    value, error = resolve_secret(str(step["send_secret"]))
+    if error:
+        return "", False, error
+    return value, True, None
 
+
+def _b64_fragments(raw: bytes, encode) -> set[str]:
+    """The base64 characters that depend only on `raw`'s bytes, at each of the
+    three alignments `raw` can take inside a longer string (`user:` + secret in
+    a Basic-auth header lands at an arbitrary offset). Characters that also
+    depend on a neighbouring byte are left out, so every fragment matches
+    wherever the secret sits."""
+    out = set()
+    for k in range(3):
+        enc = encode(b"\x00" * k + raw).decode().rstrip("=")
+        out.add(enc[-(-8 * k // 6) : (8 * (k + len(raw))) // 6])
+    return out
+
+
+def _secret_forms(value: str) -> set[str]:
+    """`value` plus the encodings a program or page commonly echoes it in:
+    percent-encoded (both hex cases), form-encoded, HTML-escaped, JSON-escaped,
+    hex, and base64 (standard, URL-safe, padded or not, at any alignment).
+    Derived forms shorter than 6 characters are dropped: they would match
+    ordinary text."""
+    if not value:
+        return set()
+    raw = value.encode()
+    forms = {
+        quote(value, safe=""),
+        quote(value),
+        quote_plus(value),
+        html.escape(value),
+        html.escape(value, quote=False),
+        json.dumps(value)[1:-1],
+        json.dumps(value, ensure_ascii=False)[1:-1],
+        raw.hex(),
+        base64.b64encode(raw).decode(),
+        base64.urlsafe_b64encode(raw).decode(),
+    }
+    forms |= {f.rstrip("=") for f in forms}
+    forms |= {re.sub(r"%[0-9A-F]{2}", lambda m: m.group().lower(), f) for f in forms}
+    if len(value) >= 8:
+        forms |= _b64_fragments(raw, base64.b64encode)
+        forms |= _b64_fragments(raw, base64.urlsafe_b64encode)
+    return {f for f in forms if len(f) >= 6} | {value}
+
+
+def _redact(transcript: str, secret_values: list[str]) -> str:
+    """Replace every occurrence of every value in `secret_values`, and of each
+    encoded form from `_secret_forms`, anywhere in `transcript` with `***`.
+
+    Scrubbing the complete text, not just the line where a step sent a secret,
+    covers a child process or page that repeats the value on its own later.
+    Longest forms go first so a long form is never left half-replaced by a
+    shorter one nested inside it. Empty values are skipped.
+    """
+    forms: set[str] = set()
+    for value in set(secret_values):
+        forms |= _secret_forms(value)
+    for form in sorted(forms, key=len, reverse=True):
+        transcript = transcript.replace(form, "***")
+    return transcript
+
+
+def _gopass_entries() -> list[str]:
+    """Entry names from `gopass ls --flat`. Nothing is decrypted. Empty when
+    gopass is missing or fails."""
     try:
         result = subprocess.run(
-            ["gopass", "show", entry_name],
-            capture_output=True,
-            text=True,
-            timeout=_SEND_SECRET_TIMEOUT,
-            check=False,
+            ["gopass", "ls", "--flat"], capture_output=True, text=True, timeout=5, check=False
         )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return sorted(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def note_user_message(text: str) -> None:
+    """Record every vault entry whose name appears in `text`. Called with the
+    user's own message only, so a name the model picked cannot confirm itself."""
+    if not text.strip():
+        return
+    for name in _gopass_entries():
+        if re.search(rf"(?<![\w/-]){re.escape(name)}(?![\w/-])", text):
+            _confirmed_secret_entries.add(name)
+
+
+def _taskkill_tree(pid: int) -> None:
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, check=False)
+
+
+def _kill_process_tree(proc: "subprocess.Popen[str]") -> None:
+    """End `proc` and every process it started. `taskkill /T` walks the tree on
+    Windows; elsewhere the child leads its own process group."""
+    if sys.platform == "win32":
+        _taskkill_tree(proc.pid)
+    else:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+
+
+def _gopass_show(entry_name: str) -> "subprocess.CompletedProcess[str]":
+    """`gopass show <name>`, and the whole process tree is killed on timeout:
+    `subprocess.run` would end only gopass, and the gpg it started would outlive
+    it."""
+    extra: dict[str, Any] = {} if sys.platform == "win32" else {"start_new_session": True}
+    proc = subprocess.Popen(
+        ["gopass", "show", entry_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **extra
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=_SEND_SECRET_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.communicate(timeout=5)
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
+
+
+def resolve_secret(entry_name: str) -> tuple[str, str | None]:
+    """Return (value, error) for a gopass entry name. Shared by every tool that
+    accepts a vault entry (`interactive_run` `send_secret`, `browser_fill`
+    `value_secret`), so they share one name check and one decrypt path.
+
+    Decrypts only an entry the user typed in one of their own messages this
+    session (`note_user_message`). Any other name, or "?", returns the fixed
+    list of real entry names and decrypts nothing. `gopass show` gets a bounded
+    timeout (`_SEND_SECRET_TIMEOUT`): if the GPG key is not unlocked in
+    `gpg-agent`, a Gpg4win pinentry dialog can appear on the user's screen and
+    answering it takes human time, so an unanswered one would otherwise hang
+    for the full `interactive_run` timeout. Only the first line of the entry is
+    used.
+    """
+    if entry_name == "?" or entry_name not in _confirmed_secret_entries:
+        return "", _select_entry_prompt()
+    try:
+        result = _gopass_show(entry_name)
     except FileNotFoundError:
-        return "", False, (
+        return "", (
             "`gopass` is not installed (see the module docstring — "
             "`winget install GnuPG.Gpg4win` then `winget install "
             "gopass.gopass`)"
         )
     except subprocess.TimeoutExpired:
-        return "", False, (
+        return "", (
             f"`gopass show {entry_name!r}` did not return within "
             f"{_SEND_SECRET_TIMEOUT}s — likely waiting on a GPG passphrase "
             "prompt with nothing here to answer it. Unlock the key once, "
@@ -347,9 +473,9 @@ def _resolve_reply(step: dict) -> tuple[str, bool, str | None]:
         )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
-        return "", False, f"`gopass show {entry_name!r}` failed: {detail}{_available_entries_hint()}"
+        return "", f"`gopass show {entry_name!r}` failed: {detail}{_available_entries_hint()}"
     first_line = result.stdout.splitlines()[0] if result.stdout else ""
-    return first_line, True, None
+    return first_line, None
 
 
 def _select_entry_prompt() -> str:
@@ -528,10 +654,7 @@ def _run(tool_input: dict) -> str:
     ]
 
     def _scrub(text: str) -> str:
-        for secret in secrets_to_scrub:
-            if secret:
-                text = text.replace(secret, "***")
-        return text
+        return _redact(text, secrets_to_scrub)
 
     def pump_until(
         pattern: "re.Pattern[str]", deadline: float
@@ -641,7 +764,7 @@ def _run(tool_input: dict) -> str:
 
     return json.dumps(
         {
-            "transcript": clip(strip_ansi("".join(transcript)), _MAX_TRANSCRIPT),
+            "transcript": clip(_redact(strip_ansi("".join(transcript)), secrets_to_scrub), _MAX_TRANSCRIPT),
             "steps_matched": matched,
             "steps_total": len(steps),
             "exit_status": proc.exitstatus,

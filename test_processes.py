@@ -258,13 +258,10 @@ exit 1
 
 
 def confirm(mod, *names: str) -> None:
-    """Mark entry name(s) as already-confirmed, bypassing the real two-call
-    present-then-use flow for tests that are checking something OTHER than
-    that flow itself (exit-code fidelity, error surfacing, etc.) — see
-    `check_first_reference_always_forces_selection` for the dedicated test
-    of the confirmation gate itself. Without this, every other send_secret
-    test would need two throwaway calls just to get past a gate unrelated
-    to what it's actually testing.
+    """Mark entry name(s) as already typed by the user, for tests that check
+    something OTHER than the name gate (exit-code fidelity, error surfacing,
+    etc.); `check_first_reference_always_forces_selection` tests the gate
+    itself.
     """
     mod._confirmed_secret_entries.update(names)
 
@@ -370,14 +367,17 @@ def check_secret_redacted_even_when_echoed_back_later(mod) -> None:
 
 
 def check_first_reference_always_forces_selection(mod) -> None:
-    print("send_secret: a DIRECT, CORRECT, real entry name is still refused "
-          "on its first-ever reference -- same incident/rationale as the "
-          "Linux/Mac originals: nothing should skip straight to using the "
-          "only entry that exists, with no '?' involved at all")
+    print("send_secret: a real entry the user has not named is refused however "
+          "many times the model asks; the user naming it in a message confirms it")
+    mod._confirmed_secret_entries.discard("existing-entry")
     with _FakeGopassOnPath():
         r1 = call(mod, {
             "command": PROMPT_CMD,
-            "steps": [{"expect": "Enter: ", "send_secret": "fresh-unconfirmed-entry"}],
+            "steps": [{"expect": "Enter: ", "send_secret": "existing-entry"}],
+        })
+        r1b = call(mod, {
+            "command": PROMPT_CMD,
+            "steps": [{"expect": "Enter: ", "send_secret": "existing-entry"}],
         })
     check("first reference is refused, not used, even though it's a real correct name",
           "error" in r1, str(r1))
@@ -385,13 +385,19 @@ def check_first_reference_always_forces_selection(mod) -> None:
           "please select the cred name I need to use:" in r1.get("error", ""), str(r1))
     check("no transcript leaked through on the refused first attempt",
           "transcript" not in r1, str(r1))
+    check("asking a second time does not confirm it",
+          "please select the cred name I need to use:" in r1b.get("error", "")
+          and "transcript" not in r1b, str(r1b))
+    check("the model asking never added the entry",
+          "existing-entry" not in mod._confirmed_secret_entries)
 
     with _FakeGopassOnPath():
+        mod.note_user_message("please use existing-entry for this login")
         r2 = call(mod, {
             "command": match_cmd("fake-secret-value-9k2m"),
-            "steps": [{"expect": "Enter: ", "send_secret": "fresh-unconfirmed-entry"}],
+            "steps": [{"expect": "Enter: ", "send_secret": "existing-entry"}],
         })
-    check("SAME name, second reference, now proceeds for real",
+    check("once the user has typed the name, the same call proceeds for real",
           "error" not in r2, str(r2))
     check("and actually works correctly once confirmed",
           "GOT:MATCH" in r2.get("transcript", ""), str(r2))

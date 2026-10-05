@@ -5,7 +5,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.styles import Style
 
-from core import listen, speak
+from core import listen, processes, speak
 from core.chat import Chat
 from core.claude import load_claude_models, resolve_model_swap
 
@@ -40,6 +40,9 @@ class CliApp:
             text = text[len("/think "):]
             thinking = True
 
+        # Only the user's own typed or dictated text confirms a vault entry; a
+        # task delegated over MCP reaches Chat.run without passing through here.
+        processes.note_user_message(text)
         response = await self.agent.run(text, thinking=thinking)
         print(f"\nResponse:\n{response}")
 
