@@ -19,6 +19,7 @@ from core import (
     computer,
     config_edit,
     data,
+    desktop_window,
     documents,
     files,
     kernel,
@@ -41,6 +42,7 @@ MODULES = [
     powershell_session,  # persistent pwsh: cd/vars/functions survive calls
     memory,      # cross-session memory (learned schema)
     computer,    # screen/mouse/keyboard control (client toolset, no beta header)
+    desktop_window,  # list/focus/move windows (Win32 through ctypes)
     screen_find,  # locate on-screen text and buttons by OCR, in computer coordinates
     browser,     # Playwright DOM surfing
     documents,   # LibreOffice / pandoc conversion

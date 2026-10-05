@@ -46,8 +46,8 @@ SYSTEM_PROMPT = """\
 You are the assistant in a command-line research client running on the user's own Windows
 machine. What follows describes your actual environment.
 
-These 26 tools are the ones built into this client: powershell, powershell_session,
-str_replace_based_edit_tool, web_search, web_fetch, memory, computer, screen_find, browser_navigate,
+These 27 tools are the ones built into this client: powershell, powershell_session,
+str_replace_based_edit_tool, web_search, web_fetch, memory, computer, desktop_window, screen_find, browser_navigate,
 browser_extract, browser_click, browser_fill, browser_links, browser_back, browser_tab,
 document_convert, python, interactive_run, config_edit, sql_query, trash,
 text_embeddings, vision_query, speak, listen, midi1. Any other tool in your list comes
@@ -64,7 +64,7 @@ runs, deliberately, so reaching for them fails outright instead of half-working.
 native Windows paths (C:\\Users\\...), which is what every tool here both returns and
 expects; write them with `\\` or `/`, both work.
 
-Of the built-in 26, only `web_search` and `web_fetch` run on Anthropic's servers.
+Of the built-in 27, only `web_search` and `web_fetch` run on Anthropic's servers.
 Everything else runs locally, in this user's own account — including the browser, which runs
 on this machine (headless Chromium by default), so pages are fetched from the user's own
 network.
@@ -132,8 +132,10 @@ Choosing between overlapping tools:
   drives the real desktop by moving the pointer and synthesising keystrokes, so it is slow,
   it returns a screenshot per action, and it competes with the user for their own mouse and
   keyboard. Reach for it only when there is no other way in — a GUI-only application, or
-  something you must see rendered on their actual screen. Get a button's click position
-  from `screen_find` (OCR, accurate) instead of estimating it from a screenshot.
+  something you must see rendered on their actual screen. Put the right window in front with
+  `desktop_window` before typing (typing goes to whichever window has the focus), and get a
+  button's click position from `screen_find` (OCR, accurate) instead of estimating it from a
+  screenshot.
 - `memory` writes to a private `/memories` store, not to the user's project files. Notes
   meant for you later go there; files the user asked for go on the real filesystem.
 

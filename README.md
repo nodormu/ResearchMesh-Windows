@@ -42,7 +42,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**26 local tools**, plus whatever your MCP servers expose:
+**27 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -52,6 +52,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
 | `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#good-to-know)) |
+| `desktop_window` | List windows, and focus, move, resize, maximize (`fullscreen`), minimize or restore one, so keystrokes reach the right window. Uses the Win32 API through `ctypes`; a window of an elevated program ignores a client that is not elevated |
 | `screen_find` | Find on-screen text (`text`) or button-like blocks (`buttons: true`) by OCR, inside a `region` when one is given, and return click coordinates in `computer`'s space; reads text on coloured buttons that plain OCR misses (needs Tesseract) |
 | `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` · `_tab` | [Playwright](https://playwright.dev/) DOM browsing: renders JavaScript, follows links and new tabs, fills forms, saves downloads to `~/Downloads`. `_navigate` takes `mode` and `profile` ([see below](#browser-modes)); `_tab` lists, switches and closes tabs; `_fill` takes a `gopass` vault entry (`value_secret`) without the value appearing in the conversation, or `submit` to press Enter afterwards |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
@@ -97,7 +98,7 @@ the REPL instead of by Claude.
   systems everyone else's work goes through — a CRM/CMDB (ServiceNow, ConnectWise,
   whatever the organization already runs) as its system of record, change tickets
   opened for anything that touches production. Those are examples, not a fixed list.
-  None of that is built into this app's 26 tools directly; it's what
+  None of that is built into this app's 27 tools directly; it's what
   [MCP, in both directions](#mcp-in-both-directions) is *for* — connect it to an
   email MCP server, a Teams/Slack one, your CMDB's — and it participates the same way
   a new hire would, through the same front doors, not a side channel. That reframes
@@ -827,7 +828,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            26 local tools           [mcp] in config.toml
+     mcp_server.py            27 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
@@ -1037,6 +1038,7 @@ Claude, not a place for your project files — and it persists until you delete 
 | `sql_query` | `duckdb` |
 | `trash` | `send2trash` |
 | `computer` | `pyautogui`, `pillow` |
+| `desktop_window` | nothing: the Win32 API through `ctypes` |
 | `screen_find` | `pillow`; plus Tesseract from winget |
 | `memory` | nothing — standard library only |
 
