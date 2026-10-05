@@ -14,7 +14,8 @@
 > converted to a real PDF via pandoc+soffice) and `interactive_run` (a real prompt
 > answered end-to-end via a spawned PowerShell script). All five of the tools most likely
 > to behave differently in practice than on paper have now been hands-on verified on a
-> real Windows box.
+> real Windows box. `desktop_window`, `screen_find`, monitor choice, the browser's `real` and
+> `virtual` modes and the vault name check came later and have not been driven on Windows yet.
 
                             ┌── /think
                             ├── /clear
@@ -1131,7 +1132,10 @@ core/
   powershell_session.py          persistent PowerShell — cd/$env:/functions survive calls
   memory.py                      /memories store, persists across sessions
   computer.py                    screenshots + mouse/keyboard
+  desktop_window.py              list, focus, move and resize windows (Win32)
+  screen_find.py                 on-screen text and button search by OCR
   browser.py                     Playwright DOM surfing
+  browser_session.py             browser launch modes, profiles, downloads
   documents.py                   LibreOffice / pandoc conversion
   kernel.py                      persistent IPython kernel
   processes.py                   ConPTY — commands that prompt

@@ -123,6 +123,13 @@ mido[ports-rtmidi]>=1.3  # `midi1` — MIDI 1.0 device I/O (core/midi1.py), the 
 #   winget install TheDocumentFoundation.LibreOffice  # docx/odt/xlsx/pptx <-> pdf
 #   winget install JohnMacFarlane.Pandoc              # markdown -> docx/odt/pdf
 #
+# `screen_find` shells out to Tesseract. Its installer puts it in
+# C:\Program Files\Tesseract-OCR without adding it to PATH; core/screen_find.py
+# looks there too:
+#   winget install UB-Mannheim.TesseractOCR           # OCR word boxes for on-screen text
+#
+# The `real` and `virtual` browser modes drive an installed Google Chrome.
+#
 # LibreOffice does not add itself to PATH, so core/documents.py also looks in
 # C:\Program Files\LibreOffice\program. It invokes soffice.com, not soffice.exe:
 # the .exe detaches and returns 0 before converting anything. Pandoc's installer
