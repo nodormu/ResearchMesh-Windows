@@ -28,6 +28,8 @@ import sys
 import threading
 import time
 from collections import deque
+from typing import Any
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -744,7 +746,8 @@ SEQUENCE_TYPES = {"rpn", "nrpn", "mtc_quarter_frame_sequence"}
 def check_round_trip(midi1) -> None:
     """Every built wire message decodes to a dict that rebuilds to the same
     bytes; every type that has a decoder decodes to itself."""
-    mismatched, decoded_as = [], {}
+    mismatched: list[str] = []
+    decoded_as: dict[str, set[str]] = {}
     for name, msg in CASES:
         if name.startswith("err:"):
             continue
@@ -879,10 +882,10 @@ def check_stream_decoder(midi1) -> None:
     for name, msg in CASES:
         if name.startswith("err:") or msg["type"] not in SEQUENCE_TYPES:
             continue
-        wire = midi1._build_message_sequence(dict(msg))
-        combined = feed(wire)
+        built = midi1._build_message_sequence(dict(msg))
+        combined = feed(built)
         rebuilt = midi1._build_message_sequence(dict(combined[-1])) if combined else []
-        if [m.bytes() for m in rebuilt] != [m.bytes() for m in wire]:
+        if [m.bytes() for m in rebuilt] != [m.bytes() for m in built]:
             wrong.append(f"{name}: {combined}")
     check("stream: every rpn/nrpn/quarter frame case reassembles and rebuilds",
           not wrong, "; ".join(wrong[:3]))
@@ -1062,6 +1065,7 @@ def check_schema(midi1) -> None:
             check(f"{t} rejects an unknown command", False)
         except ValueError as e:
             found = re.search(r"must be one of (\[.*?\])", str(e))
+            assert found is not None, str(e)
             accepted |= set(json.loads(found.group(1).replace("'", '"')))
     enum = set(props["command"]["enum"])
     check("command enum == commands the code accepts",
@@ -1248,11 +1252,11 @@ def check_rawmidi_proc(midi1) -> None:
             f.write("X\n\nType: Legacy\nOutput 0\n  Tx bytes     : 9\n  Owner PID    : 1\n"
                     "  Mode         : native\n  Buffer size  : 4096\n  Avail        : 1234\n"
                     "Input 0\n  Rx bytes     : 0\nInput 1\n  Rx bytes     : 0\n")
-        glob_module.glob = lambda pattern: real_glob(pattern.replace("/proc/asound", root))
-        try:
+        def fake_glob(pattern):
+            return real_glob(pattern.replace("/proc/asound", root))
+
+        with mock.patch.object(glob_module, "glob", fake_glob):
             mapping = [midi1._rawmidi_output(9, port) for port in range(5)]
-        finally:
-            glob_module.glob = real_glob
         check("rawmidi: ports number across devices, max(outputs, inputs) each",
               mapping == [(f"{card}/midi0", 0), (f"{card}/midi0", 1), (f"{card}/midi1", 0),
                           None, None], f"{mapping}")
@@ -1262,7 +1266,8 @@ def check_rawmidi_proc(midi1) -> None:
 
 
 def _fake_input(midi1, name: str):
-    buf, event = deque(maxlen=10), threading.Event()
+    buf: deque[Any] = deque(maxlen=10)
+    event = threading.Event()
     midi1._OPEN_PORTS[name] = ("input", _FakePort())
     midi1._INPUT_BUFFERS[name] = buf
     midi1._INPUT_EVENTS[name] = event
