@@ -32,7 +32,8 @@ TOOLS = [
         "name": "desktop_window",
         "description": (
             "List the desktop's windows, or bring one to the front, move or resize "
-            "it, maximize it, or minimize it. Windows only. Use it before `computer` "
+            "it, maximize it, or minimize it. Windows only. Windows on other virtual "
+            "desktops are listed with the flag other-desktop. Use it before `computer` "
             "when keystrokes must reach a particular window: typing goes to whichever "
             "window has the focus. `window` is a window id from `list` (like 0x1A2B3C), "
             "or part of its title or program name (for example `chrome` or "
@@ -100,6 +101,20 @@ def _outer_rect(
     height = request.get("height", visible[3])
     left, top, right, bottom = delta
     return x - left, y - top, width + left + right, height + top + bottom
+
+
+_CLOAKED_SHELL = 0x2  # DWM_CLOAKED_SHELL: the shell hides the window, as it does one on another virtual desktop
+
+
+def _desktop_state(cloaked: int) -> str | None:
+    """"here" for a window the user can see, "other" for one on another virtual
+    desktop, None for one cloaked for another reason (a suspended app's ghost
+    window)."""
+    if cloaked == 0:
+        return "here"
+    if cloaked == _CLOAKED_SHELL:
+        return "other"
+    return None
 
 
 class _Win32:
@@ -175,10 +190,10 @@ class _Win32:
         finally:
             self.kernel32.CloseHandle(handle)
 
-    def _cloaked(self, hwnd: int) -> bool:
+    def _cloak(self, hwnd: int) -> int:
         value = ctypes.c_uint32(0)
         self.dwm.DwmGetWindowAttribute(hwnd, 14, ctypes.byref(value), 4)  # DWMWA_CLOAKED
-        return value.value != 0
+        return value.value
 
     def _window_rect(self, hwnd: int) -> tuple[int, int, int, int]:
         rect = _RECT()
@@ -210,6 +225,7 @@ class _Win32:
             "x": x, "y": y, "w": w, "h": h, "output": "",
             "minimized": bool(self.user32.IsIconic(hwnd)), "maximized": bool(self.user32.IsZoomed(hwnd)),
             "active": self.foreground() == hwnd,
+            "other_desktop": _desktop_state(self._cloak(hwnd)) == "other",
         }
 
     def windows(self) -> list[dict]:
@@ -223,7 +239,9 @@ class _Win32:
         self.user32.EnumWindows(callback, 0)
         out = []
         for hwnd in found:
-            if not self.user32.IsWindowVisible(hwnd) or self._cloaked(hwnd) or self._class(hwnd) == "Progman":
+            if not self.user32.IsWindowVisible(hwnd) or self._class(hwnd) == "Progman":
+                continue
+            if _desktop_state(self._cloak(hwnd)) is None:
                 continue
             style = self.user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
             appwindow = bool(style & 0x40000)  # WS_EX_APPWINDOW
@@ -355,6 +373,8 @@ def _attach_outputs(windows: list[dict], screens: list[dict]) -> None:
 
 def _row(window: dict) -> str:
     flags = [name for name in ("active", "minimized", "maximized") if window.get(name)]
+    if window.get("other_desktop"):
+        flags.append("other-desktop")
     title = window["title"] if len(window["title"]) <= 80 else window["title"][:77] + "..."
     return (
         f'{window["id"]:<10} {window["output"] or "-":<12} {window["x"]},{window["y"]} '
@@ -385,10 +405,12 @@ def available() -> str | None:
     return None
 
 
-def _activate(api: Any, hwnd: int) -> str:
+def _activate(api: Any, hwnd: int, other_desktop: bool = False) -> str:
     """Bring the window to the front. Windows lets only some callers take the
     focus, so try the plain call, then sharing the foreground thread's input,
-    then a tap of Alt. Returns a note when none of them worked."""
+    then a tap of Alt. Returns a note when none of them worked. A window on
+    another virtual desktop is asked for the same way, and Windows decides
+    whether to switch to that desktop."""
     if api.is_iconic(hwnd):
         api.show(hwnd, _SW_RESTORE)
     for step in (api.set_foreground, api.set_foreground_attached, api.set_foreground_after_alt):
@@ -396,13 +418,16 @@ def _activate(api: Any, hwnd: int) -> str:
         time.sleep(0.05)
         if api.foreground() == hwnd:
             return ""
-    return "Windows did not let this process take the focus; another program holds the foreground."
+    note = "Windows did not let this process take the focus; another program holds the foreground."
+    if other_desktop:
+        note += " The window is on another virtual desktop: switch to that desktop yourself."
+    return note
 
 
 def _apply(api: Any, hwnd: int, action: str, args: dict) -> str:
     """Do `action` to the window. Returns a note, or an empty string."""
     if action == "activate":
-        return _activate(api, hwnd)
+        return _activate(api, hwnd, bool(api.info(hwnd).get("other_desktop")))
     if action == "minimize":
         api.show(hwnd, _SW_MINIMIZE)
     elif action == "restore":

@@ -40,7 +40,7 @@ SCREENS = [{"name": r"\\.\DISPLAY1", "x": 0, "y": 0, "w": 1920, "h": 1080},
 
 def record(hwnd: int, title: str, program: str, x=100, y=100, w=800, h=600, **flags) -> dict:
     return {"id": f"0x{hwnd:x}", "hwnd": hwnd, "title": title, "cls": program, "pid": hwnd, "x": x, "y": y, "w": w, "h": h,
-            "output": "", "minimized": False, "maximized": False, "active": False, **flags}
+            "output": "", "minimized": False, "maximized": False, "active": False, "other_desktop": False, **flags}
 
 
 class FakeApi:
@@ -53,6 +53,7 @@ class FakeApi:
             0x200: record(0x200, "Wikipedia - Chrome", "chrome.exe", x=1950, y=40, w=900, h=700),
             0x201: record(0x201, "Inbox - Chrome", "chrome.exe", x=300, y=300, w=700, h=500),
             0x300: record(0x300, "zsh - Terminal", "WindowsTerminal.exe", x=50, y=50, w=640, h=400, minimized=True),
+            0x400: record(0x400, "Budget - Word", "winword.exe", x=200, y=200, w=700, h=500, other_desktop=True),
         }
         self.fg = 0x100
         self.log: list[tuple] = []
@@ -242,6 +243,27 @@ async def main_async() -> None:
     check("the reply says the window did not change and why", "Note: the window did not change as asked" in out and "elevated" in out, out)
     api.ignore = set()
     check("a change that worked has no note", "Note:" not in await run(api, action="minimize", window="notes"))
+
+    print("windows on other virtual desktops")
+    check("a shell-cloaked window is on another desktop", dw._desktop_state(0x2) == "other")
+    check("a window the user can see is here", dw._desktop_state(0) == "here")
+    check("a window cloaked by its app or inherited is left out", dw._desktop_state(0x1) is None and dw._desktop_state(0x4) is None)
+    check("any combination with another cloak reason is left out", dw._desktop_state(0x3) is None and dw._desktop_state(0x6) is None)
+    api = FakeApi()
+    out = await run(api, action="list")
+    word_row = next(line for line in out.splitlines() if "winword.exe" in line)
+    check("a window on another desktop is listed with its flag", "other-desktop" in word_row, word_row)
+    check("windows on this desktop carry no such flag", all("other-desktop" not in line for line in out.splitlines() if "winword.exe" not in line))
+    out = await run(api, action="activate", window="budget")
+    check("asking for it works like any other window", out.startswith("activate done:") and "Note:" not in out and api.fg == 0x400, out)
+    api = FakeApi()
+    api.deny = {"set_foreground", "set_foreground_attached", "set_foreground_after_alt"}
+    out = await run(api, action="activate", window="budget")
+    check("when Windows refuses, the note says the window is on another virtual desktop", "Note: Windows did not let this process take the focus" in out and "another virtual desktop" in out, out)
+    api = FakeApi()
+    api.deny = {"set_foreground", "set_foreground_attached", "set_foreground_after_alt"}
+    out = await run(api, action="activate", window="inbox")
+    check("a window on this desktop gets no desktop advice", "virtual desktop" not in out, out)
 
     print("no match and too many")
     api = FakeApi()

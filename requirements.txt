@@ -128,7 +128,8 @@ mido[ports-rtmidi]>=1.3  # `midi1` — MIDI 1.0 device I/O (core/midi1.py), the 
 # looks there too:
 #   winget install UB-Mannheim.TesseractOCR           # OCR word boxes for on-screen text
 #
-# The `real` and `virtual` browser modes drive an installed Google Chrome.
+# The `real` and `virtual` browser modes drive an installed Google Chrome, or
+# Microsoft Edge (already on Windows) when Chrome is missing.
 #
 # LibreOffice does not add itself to PATH, so core/documents.py also looks in
 # C:\Program Files\LibreOffice\program. It invokes soffice.com, not soffice.exe:

@@ -1,13 +1,13 @@
 """Browser lifecycle for core/browser.py: launch modes, profiles, downloads.
 
 Modes (Chromium only):
-  headless  no window. Installed Google Chrome when present (user agent
-            corrected), else bundled Chromium.
+  headless  no window. Installed Google Chrome, else Microsoft Edge, when present
+            (user agent corrected), else bundled Chromium.
   headed    visible window on the user's desktop.
   virtual   the same installed Chrome as `real`, started on a hidden desktop of
             its own, so no window appears on the user's desktop. Needs Google
-            Chrome installed.
-  real      installed Chrome started as a normal program and attached over CDP
+            Chrome or Microsoft Edge installed.
+  real      installed Chrome or Edge started as a normal program and attached over CDP
             on 127.0.0.1. No automation flags: the least detectable.
 
 `profile` names a persistent profile directory, so cookies and logins survive.
@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -64,8 +65,33 @@ def find_chrome() -> str | None:
     return None
 
 
+def find_edge() -> str | None:
+    """Microsoft Edge, which every Windows install has. It lives in Program Files
+    (x86) even on 64-bit Windows."""
+    for variable in ("PROGRAMFILES(X86)", "PROGRAMFILES", "LOCALAPPDATA"):
+        root = os.environ.get(variable)
+        if root:
+            path = Path(root) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+            if path.is_file():
+                return str(path)
+    return None
+
+
+def find_browser() -> str | None:
+    """The installed browser the tool drives: Google Chrome, else Microsoft Edge."""
+    return find_chrome() or find_edge()
+
+
+def _is_edge(path: str) -> bool:
+    return Path(path).name.lower() == "msedge.exe"
+
+
+def _browser_name(path: str) -> str:
+    return "Edge" if _is_edge(path) else "Chrome"
+
+
 def _chrome_version(chrome: str) -> str | None:
-    """Chrome's version: the numbered folder it installs beside chrome.exe, since
+    """The browser's version: the numbered folder it installs beside its .exe, since
     `chrome.exe --version` prints nothing on Windows. Falls back to asking it."""
     try:
         folders = [p.name for p in Path(chrome).parent.iterdir() if p.is_dir() and _VERSION_DIR.fullmatch(p.name)]
@@ -82,13 +108,15 @@ def _chrome_version(chrome: str) -> str | None:
 
 
 def _chrome_user_agent(chrome: str) -> str | None:
-    """The user agent a normal Chrome sends, without the 'Headless' marker."""
+    """The user agent a normal Chrome or Edge sends, without the 'Headless' marker."""
     version = _chrome_version(chrome)
     if version is None:
         return None
+    major = version.split(".")[0]
+    suffix = f" Edg/{major}.0.0.0" if _is_edge(chrome) else ""
     return (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-        f"Chrome/{version.split('.')[0]}.0.0.0 Safari/537.36"
+        f"Chrome/{major}.0.0.0 Safari/537.36{suffix}"
     )
 
 
@@ -133,6 +161,7 @@ class _HiddenProcess:
         return bool(self._kernel32.WaitForSingleObject(self._process, 0) == 0x102)  # WAIT_TIMEOUT
 
     def terminate(self) -> None:
+        _kill_tree(self.pid)
         self._kernel32.TerminateProcess(self._process, 1)
 
     def close(self) -> None:
@@ -144,8 +173,8 @@ def hidden_unavailable() -> str | None:
     """Why a hidden Chrome cannot be started here, or None."""
     if sys.platform != "win32":
         return "virtual mode runs on Windows only"
-    if find_chrome() is None:
-        return "virtual mode needs Google Chrome installed"
+    if find_browser() is None:
+        return "virtual mode needs Google Chrome or Microsoft Edge installed"
     return None
 
 
@@ -222,6 +251,26 @@ def _downloads_present() -> set[str]:
     return {p.name for p in DOWNLOAD_DIR.iterdir()} if DOWNLOAD_DIR.is_dir() else set()
 
 
+def _taskkill(pid: int) -> None:
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, check=False)
+
+
+def _kill_tree(pid: int) -> None:
+    """End a browser and every process it started. TerminateProcess ends only the
+    one process, and a browser's renderers and helpers can outlive it."""
+    if sys.platform == "win32":
+        _taskkill(pid)
+
+
+def _clear_readonly(path: Path) -> None:
+    """Windows will not delete a read-only file, so clear the flag first. Only
+    files are touched: elsewhere a directory without its search bit is unreadable."""
+    for item in path.rglob("*"):
+        if item.is_file():
+            with contextlib.suppress(OSError):
+                os.chmod(item, stat.S_IWRITE | stat.S_IREAD)
+
+
 class Session:
     def __init__(self, mode: str, profile: str | None):
         self.mode = mode
@@ -246,17 +295,17 @@ class Session:
         return self.context.pages[0] if self.context.pages else await self.context.new_page()
 
     async def _open_playwright(self) -> None:
-        chrome = find_chrome()
+        chrome = find_browser()
         args = list(LAUNCH_ARGS)
         launch: dict = {"headless": self.mode == "headless", "args": args}
         if chrome:
-            launch["channel"] = "chrome"
+            launch["channel"] = "msedge" if _is_edge(chrome) else "chrome"
         context_opts: dict = {"accept_downloads": True}
         if self.mode == "headless" and chrome:
             agent = await asyncio.to_thread(_chrome_user_agent, chrome)
             if agent:
                 context_opts["user_agent"] = agent
-        self.detail = "installed Chrome" if chrome else "bundled Chromium"
+        self.detail = f"installed {_browser_name(chrome)}" if chrome else "bundled Chromium"
         chromium = self.playwright.chromium
         if self.profile:
             self.context = await chromium.launch_persistent_context(
@@ -267,9 +316,10 @@ class Session:
             self.context = await self.browser.new_context(**context_opts)
 
     async def _open_real(self) -> None:
-        chrome = find_chrome()
+        chrome = find_browser()
         if not chrome:
-            raise RuntimeError(f"{self.mode} mode needs Google Chrome installed")
+            raise RuntimeError(f"{self.mode} mode needs Google Chrome or Microsoft Edge installed")
+        name = _browser_name(chrome)
         hidden = self.mode == "virtual"
         if hidden:
             reason = hidden_unavailable()
@@ -301,7 +351,7 @@ class Session:
             exited = (not self._hidden.alive()) if hidden else (proc is not None and proc.returncode is not None)
             if exited:
                 raise RuntimeError(
-                    "Chrome exited at startup; the profile may already be open in another Chrome"
+                    f"{name} exited at startup; the profile may already be open in another {name}"
                 )
             try:
                 self.browser = await self.playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
@@ -309,7 +359,7 @@ class Session:
             except Exception:
                 await asyncio.sleep(0.4)
         else:
-            raise RuntimeError("Chrome did not open its debug port")
+            raise RuntimeError(f"{name} did not open its debug port")
         self.context = self.browser.contexts[0]
         # Chrome overwrites a same-name file when told where to save, so it
         # writes to a private staging dir and new_downloads() moves each
@@ -319,7 +369,7 @@ class Session:
         await cdp.send("Browser.setDownloadBehavior", {
             "behavior": "allow", "downloadPath": str(self._staging), "eventsEnabled": True,
         })
-        self.detail = "installed Chrome, on a hidden desktop, over CDP" if hidden else "installed Chrome over CDP"
+        self.detail = f"installed {name}, on a hidden desktop, over CDP" if hidden else f"installed {name} over CDP"
 
     def _watch_downloads(self, page) -> None:
         """Playwright-launched browsers deliver downloads as events; a CDP-attached
@@ -389,6 +439,7 @@ class Session:
                 await self.playwright.stop()
         for proc in self._procs:
             if proc.returncode is None:
+                _kill_tree(proc.pid)
                 with contextlib.suppress(ProcessLookupError):
                     proc.terminate()
                 try:
@@ -406,11 +457,13 @@ class Session:
             self._hidden.close()
         for leftover in (self._tmpdir, self._staging):
             if leftover is not None:
-                # Chrome can still be flushing files as it exits.
-                for _ in range(4):
+                # The browser's helpers can hold files for a few seconds after it exits.
+                for attempt in range(15):
                     shutil.rmtree(leftover, ignore_errors=True)
                     if not leftover.exists():
                         break
+                    if attempt:
+                        _clear_readonly(leftover)
                     await asyncio.sleep(0.4)
 
 

@@ -108,7 +108,7 @@ Choosing between overlapping tools:
   switches and closes tabs. It starts headless. When a Cloudflare human check stops a
   fresh visit it reopens itself in `virtual` mode (a hidden desktop); if the report still
   says `Human check: pending`, navigate again with `mode: real` (the user's installed
-  Chrome in a visible window they can click in) or ask the user to click it. A `profile`
+  Chrome or Edge in a visible window they can click in) or ask the user to click it. A `profile`
   name keeps logins between sessions. Files the browser downloads land in ~/Downloads.
 - Querying a CSV, Parquet, or JSON file: `sql_query` reads it in place, no import step.
 - Vector embeddings: there is no Anthropic-hosted embeddings endpoint, so use

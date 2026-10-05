@@ -168,6 +168,61 @@ def windows_pieces(sess) -> None:
             check("the Win32 launch refuses to run off Windows", "needs Windows" in str(e), str(e))
 
 
+def edge_pieces(sess) -> None:
+    """The Edge fallback, the tree kill and the folder cleanup, none of which need Windows."""
+    import stat
+    import subprocess
+    from unittest import mock
+
+    print("Edge fallback, tree kill and cleanup")
+    saved = {v: os.environ.get(v) for v in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")}
+    try:
+        for v in saved:
+            os.environ.pop(v, None)
+        edge_app = WORK / "edge86" / "Microsoft" / "Edge" / "Application"
+        edge_app.mkdir(parents=True)
+        (edge_app / "msedge.exe").write_bytes(b"")
+        (edge_app / "154.0.4258.37").mkdir()
+        os.environ["PROGRAMFILES(X86)"] = str(WORK / "edge86")
+        edge = str(edge_app / "msedge.exe")
+        check("with no Chrome, Edge is found and used", sess.find_chrome() is None and sess.find_edge() == edge and sess.find_browser() == edge)
+        check("Edge's version comes from its numbered folder", sess._chrome_version(edge) == "154.0.4258.37", str(sess._chrome_version(edge)))
+        agent = sess._chrome_user_agent(edge) or ""
+        check("Edge's user agent adds the Edg/ token with the same major version", "Chrome/154.0.0.0" in agent and agent.endswith("Safari/537.36 Edg/154.0.0.0") and "Headless" not in agent, agent)
+        chrome_app = WORK / "pf3" / "Google" / "Chrome" / "Application"
+        chrome_app.mkdir(parents=True)
+        (chrome_app / "chrome.exe").write_bytes(b"")
+        (chrome_app / "131.0.6778.86").mkdir()
+        os.environ["PROGRAMFILES"] = str(WORK / "pf3")
+        check("when both are installed Chrome wins", sess.find_browser() == str(chrome_app / "chrome.exe"))
+        check("the name follows the executable", sess._browser_name(edge) == "Edge" and sess._browser_name(str(chrome_app / "chrome.exe")) == "Chrome")
+        chrome_agent = sess._chrome_user_agent(str(chrome_app / "chrome.exe")) or ""
+        check("Chrome's user agent has its own version and no Edg/ token", "Chrome/131.0.0.0" in chrome_agent and "Edg/" not in chrome_agent, chrome_agent)
+        for v in saved:
+            os.environ.pop(v, None)
+        check("with neither installed there is no browser", sess.find_browser() is None)
+    finally:
+        for v, value in saved.items():
+            if value is None:
+                os.environ.pop(v, None)
+            else:
+                os.environ[v] = value
+
+    with mock.patch.object(subprocess, "run") as run:
+        sess._taskkill(4242)
+    check("the tree kill is taskkill /F /T on the pid", run.call_args[0][0] == ["taskkill", "/F", "/T", "/PID", "4242"], str(run.call_args))
+    with mock.patch.object(sess, "_taskkill") as kill:
+        sess._kill_tree(7)
+    check("off Windows the tree kill leaves the normal terminate to do the work", sys.platform == "win32" or kill.call_count == 0)
+    folder = WORK / "readonly"
+    (folder / "sub").mkdir(parents=True)
+    locked = folder / "sub" / "locked.txt"
+    locked.write_text("x")
+    locked.chmod(stat.S_IREAD)
+    sess._clear_readonly(folder)
+    check("read-only files are made writable so the folder can be removed", os.access(locked, os.W_OK))
+
+
 async def main_async(mod, sess, base: str) -> None:
     chrome = sess.find_chrome()
     have_display = sys.platform == "win32"
@@ -357,6 +412,7 @@ def main() -> int:
     import core.browser_session as sess
 
     windows_pieces(sess)
+    edge_pieces(sess)
     sess.profile_root = lambda: WORK / "cache" / "researchmesh" / "browser-profiles"
 
     server = HTTPServer(("127.0.0.1", 0), Handler)

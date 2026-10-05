@@ -53,7 +53,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
 | `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#good-to-know)) |
-| `desktop_window` | List windows, and focus, move, resize, maximize (`fullscreen`), minimize or restore one, so keystrokes reach the right window. Uses the Win32 API through `ctypes`; a window of an elevated program ignores a client that is not elevated |
+| `desktop_window` | List windows, and focus, move, resize, maximize (`fullscreen`), minimize or restore one, so keystrokes reach the right window. Uses the Win32 API through `ctypes`; a window of an elevated program ignores a client that is not elevated. Windows on other virtual desktops are listed and flagged `other-desktop` |
 | `screen_find` | Find on-screen text (`text`) or button-like blocks (`buttons: true`) by OCR, inside a `region` when one is given, and return click coordinates in `computer`'s space; reads text on coloured buttons that plain OCR misses (needs Tesseract) |
 | `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` · `_tab` | [Playwright](https://playwright.dev/) DOM browsing: renders JavaScript, follows links and new tabs, fills forms, saves downloads to `~/Downloads`. `_navigate` takes `mode` and `profile` ([see below](#browser-modes)); `_tab` lists, switches and closes tabs; `_fill` takes a `gopass` vault entry (`value_secret`) without the value appearing in the conversation, or `submit` to press Enter afterwards |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
@@ -79,10 +79,10 @@ the REPL instead of by Claude.
 
 `browser_navigate` takes `mode` and `profile`:
 
-- `headless` (default): no window. Uses installed Google Chrome if present, else the bundled Chromium.
+- `headless` (default): no window. Uses installed Google Chrome if present, else Microsoft Edge, else the bundled Chromium.
 - `headed`: a visible window on your desktop. `headed: true` is an alias.
-- `virtual`: the same installed Chrome as `real`, started on a hidden desktop of its own and attached over CDP, so no window appears on yours. It needs Google Chrome installed. This mode has not been driven on a real Windows desktop; if Chrome cannot start there, a stopped visit keeps its headless report.
-- `real`: your installed Chrome, started as a normal program and attached over CDP. It is the least detectable mode and opens a window you can click in. The client closes it on exit. It needs Google Chrome in Program Files or `%LOCALAPPDATA%`.
+- `virtual`: the same installed Chrome as `real`, started on a hidden desktop of its own and attached over CDP, so no window appears on yours. It needs Google Chrome or Microsoft Edge installed. This mode has not been driven on a real Windows desktop; if the browser cannot start there, a stopped visit keeps its headless report.
+- `real`: your installed Chrome (or Edge, when Chrome is missing), started as a normal program and attached over CDP. It is the least detectable mode and opens a window you can click in. The client closes it on exit. It needs Google Chrome in Program Files or `%LOCALAPPDATA%`, or Microsoft Edge in Program Files (x86).
 - `profile` names a persistent profile (1-40 letters, digits, `-`, `_`) so cookies and logins survive restarts. Profiles live under `%LOCALAPPDATA%\researchmesh\browser-profiles`, inside your own profile folder. Without one, the session's profile is deleted when it closes. Changing mode or profile restarts the browser.
 - A report carries a `Human check:` line when a Cloudflare check appears. A fresh visit with no `mode` or `profile` that a check stops is reopened once in `virtual` mode; if the line still says pending, use `real` or click the check yourself.
 - Downloads are saved to `~/Downloads` (`RESEARCHMESH_DOWNLOAD_DIR` overrides) under a unique name, so an existing file is never overwritten, and are listed as `Downloaded:` lines in the result.

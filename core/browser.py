@@ -7,8 +7,8 @@ live in core/browser_session.py. Every tool trims what it returns to keep
 responses out of firehose territory.
 
 Requires:  pip install playwright  &&  playwright install chromium
-Modes `virtual` and `real` also need Google Chrome installed (`virtual` runs it
-on a hidden desktop of its own).
+Modes `virtual` and `real` also need Google Chrome, or Microsoft Edge when Chrome is
+missing (`virtual` runs it on a hidden desktop of its own).
 """
 
 import asyncio
@@ -57,9 +57,9 @@ TOOLS = [
                     "enum": list(MODES),
                     "description": (
                         "headless (default): no window. headed: a visible window. "
-                        "virtual: real Chrome on a hidden desktop, no window; use it "
+                        "virtual: real Chrome or Edge on a hidden desktop, no window; use it "
                         "when a site's human check fails headless. real: the "
-                        "installed Chrome started as a normal program, visible and "
+                        "installed Chrome or Edge started as a normal program, visible and "
                         "the least detectable; the user can click a check in it. "
                         "Leave unset to keep the current mode. Changing mode or "
                         "profile restarts the browser, which drops the open page and "
