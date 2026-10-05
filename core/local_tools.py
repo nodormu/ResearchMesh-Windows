@@ -28,6 +28,7 @@ from core import (
     powershell,
     powershell_session,
     processes,
+    screen_find,
     speak,
     text_embeddings,
     vision,
@@ -40,6 +41,7 @@ MODULES = [
     powershell_session,  # persistent pwsh: cd/vars/functions survive calls
     memory,      # cross-session memory (learned schema)
     computer,    # screen/mouse/keyboard control (client toolset, no beta header)
+    screen_find,  # locate on-screen text and buttons by OCR, in computer coordinates
     browser,     # Playwright DOM surfing
     documents,   # LibreOffice / pandoc conversion
     kernel,      # stateful IPython

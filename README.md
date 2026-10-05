@@ -42,7 +42,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 
 ## What it can do
 
-**25 local tools**, plus whatever your MCP servers expose:
+**26 local tools**, plus whatever your MCP servers expose:
 
 | Tool | For |
 |---|---|
@@ -52,6 +52,7 @@ added to **Claude Code** as one, so Claude Code can hand it the jobs it can't do
 | `web_search` · `web_fetch` | Anthropic's server-side search and page fetch |
 | `memory` | A `/memories` store that **persists across sessions** — the only state that outlives the process |
 | `computer` | Screenshots plus mouse/keyboard control of your desktop ([caveats](#good-to-know)) |
+| `screen_find` | Find on-screen text (`text`) or button-like blocks (`buttons: true`) by OCR, inside a `region` when one is given, and return click coordinates in `computer`'s space; reads text on coloured buttons that plain OCR misses (needs Tesseract) |
 | `browser_navigate` · `_links` · `_click` · `_fill` · `_extract` · `_back` · `_tab` | [Playwright](https://playwright.dev/) DOM browsing: renders JavaScript, follows links and new tabs, fills forms, saves downloads to `~/Downloads`. `_navigate` takes `mode` and `profile` ([see below](#browser-modes)); `_tab` lists, switches and closes tabs; `_fill` takes a `gopass` vault entry (`value_secret`) without the value appearing in the conversation, or `submit` to press Enter afterwards |
 | `document_convert` | LibreOffice + pandoc. Markdown → `.docx`/`.odt`/`.pdf`, or any office format to any other |
 | `python` | Persistent IPython kernel — **variables survive between calls** |
@@ -96,7 +97,7 @@ the REPL instead of by Claude.
   systems everyone else's work goes through — a CRM/CMDB (ServiceNow, ConnectWise,
   whatever the organization already runs) as its system of record, change tickets
   opened for anything that touches production. Those are examples, not a fixed list.
-  None of that is built into this app's 25 tools directly; it's what
+  None of that is built into this app's 26 tools directly; it's what
   [MCP, in both directions](#mcp-in-both-directions) is *for* — connect it to an
   email MCP server, a Teams/Slack one, your CMDB's — and it participates the same way
   a new hire would, through the same front doors, not a side channel. That reframes
@@ -460,6 +461,7 @@ OR if you prefer the alternative post-git module
 ```powershell
 winget install TheDocumentFoundation.LibreOffice # for document_convert, or leave this out if use 365
 winget install JohnMacFarlane.Pandoc             # for document_convert, for libreoffice and/or 365
+winget install UB-Mannheim.TesseractOCR          # for screen_find; the installer puts it in Program Files, which is searched
 ```
 
 ### 7) exit powershell in case and restart as regular user just to make it easier instead of establishing environment variables at the CLI
@@ -810,6 +812,7 @@ those you edit by hand.
 | `CLAUDE_SHOW_USAGE=1` | Print token and prompt-cache counts per request |
 | `CLAUDE_MEMORY_DIR` | Where `memory` stores `/memories` (default `./memories`) |
 | `CLAUDE_DISPLAY_SIZE` | Logical screen size `computer` reports, e.g. `1280x800` |
+| `CLAUDE_COMPUTER_MONITOR` | Which monitor `computer` controls: an index counting left to right, 0 being the leftmost. Default: the primary monitor |
 | `RESEARCHMESH_DOWNLOAD_DIR` | Where browser downloads land. Default `~/Downloads` |
 | `CLAUDE_KERNEL_ENCRYPTION` | `auto` (default) encrypts the `python` kernel's sockets with CurveZMQ and falls back if it can't; `required` fails the tool instead of running unencrypted; `off` skips it |
 | *(embeddings server)* | Whatever `[embeddings].api_key_env` names, if your server needs auth |
@@ -824,7 +827,7 @@ both, or neither:
    Claude Code  ──delegate──▶  ResearchMesh  ──▶  n8n / Unreal / Unity / …
    (any MCP client)            (server AND client)     (its own MCP servers)
         │                            │                          │
-     mcp_server.py            25 local tools           [mcp] in config.toml
+     mcp_server.py            26 local tools           [mcp] in config.toml
 ```
 
 **As a client**, it connects out to MCP servers and merges their tools with its own — that's
@@ -1012,6 +1015,8 @@ The client declares per-monitor DPI awareness at startup. Without it Windows rep
 virtualised coordinates on a scaled display while screenshots come back at physical
 resolution, and every click drifts further off toward the bottom-right.
 
+`computer` controls one monitor at a time: the primary monitor, or the one named by `CLAUDE_COMPUTER_MONITOR` (an index counting left to right; 0 is the leftmost). Screenshots and clicks then cover that monitor only, and a monitor to the left of or above the primary one has negative desktop coordinates, which the tool handles.
+
 The tool reports a fixed logical screen size (`CLAUDE_DISPLAY_SIZE`, default `1280x800`)
 and downscales every screenshot to exactly that, scaling Claude's coordinates back up to
 your real resolution. That's what keeps clicks landing where Claude aims — the declared
@@ -1032,6 +1037,7 @@ Claude, not a place for your project files — and it persists until you delete 
 | `sql_query` | `duckdb` |
 | `trash` | `send2trash` |
 | `computer` | `pyautogui`, `pillow` |
+| `screen_find` | `pillow`; plus Tesseract from winget |
 | `memory` | nothing — standard library only |
 
 To drop a tool entirely, remove its module from `MODULES` in `core/local_tools.py`.

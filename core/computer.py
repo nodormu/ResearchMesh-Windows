@@ -45,7 +45,7 @@ import ctypes
 import io
 import os
 import time
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from core.output import image_result
 
@@ -184,6 +184,19 @@ def _set_dpi_aware() -> None:
     # earlier call, which is the outcome we wanted anyway).
     print(f"[computer] could not set DPI awareness ({'; '.join(reasons)}); "
           "coordinates may be inaccurate on a scaled display")
+
+
+def capture() -> tuple[Any, str | None]:
+    """(native-resolution PIL image, error) of the monitor this tool controls."""
+    _set_dpi_aware()
+    try:
+        import pyautogui
+    except Exception as e:
+        return None, f"Error: the computer tool needs pyautogui ({e})."
+    try:
+        return _grab(pyautogui), None
+    except Exception as e:
+        return None, f"Error: could not capture the screen: {e}"
 
 
 def _run(action: str, tool_input: dict) -> str | dict:
@@ -479,23 +492,71 @@ def _keys(text: str) -> list[str]:
     return [_KEY_ALIASES.get(p.lower(), p.lower()) for p in parts]
 
 
+def _displays() -> list[tuple[int, int, int, int]]:
+    """Monitors as (x, y, width, height) in pixels on the virtual desktop, left to
+    right. The origin is the primary monitor's top-left corner, so a monitor to
+    its left or above it has negative coordinates. Empty when they cannot be
+    listed."""
+    try:
+        from ctypes import wintypes
+
+        rects: list[tuple[int, int, int, int]] = []
+
+        def collect(monitor, context, rect, data) -> int:
+            r = rect.contents
+            rects.append((r.left, r.top, r.right - r.left, r.bottom - r.top))
+            return 1
+
+        callback_type = ctypes.WINFUNCTYPE(
+            ctypes.c_int, wintypes.HANDLE, wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM
+        )
+        enumerate_monitors = ctypes.windll.user32.EnumDisplayMonitors
+        enumerate_monitors.argtypes = [wintypes.HDC, ctypes.c_void_p, callback_type, wintypes.LPARAM]
+        enumerate_monitors.restype = wintypes.BOOL
+        callback = callback_type(collect)
+        if not enumerate_monitors(None, None, callback, 0):
+            return []
+        return sorted(rects)
+    except Exception:
+        return []
+
+
+def _screen_rect(pyautogui) -> tuple[int, int, int, int]:
+    """The monitor this tool controls, as (x, y, width, height) on the virtual
+    desktop: the primary monitor, or the one named by CLAUDE_COMPUTER_MONITOR
+    (an index counting left to right, 0 being the leftmost)."""
+    raw = os.getenv("CLAUDE_COMPUTER_MONITOR", "").strip()
+    if raw:
+        try:
+            index = int(raw)
+        except ValueError:
+            raise ValueError(f"CLAUDE_COMPUTER_MONITOR must be a monitor index, not {raw!r}") from None
+        rects = _displays()
+        if not 0 <= index < len(rects):
+            raise ValueError(f"CLAUDE_COMPUTER_MONITOR={index} but {len(rects)} monitor(s) were found")
+        return rects[index]
+    width, height = pyautogui.size()
+    return 0, 0, width, height
+
+
 def _to_native(pyautogui, coordinate) -> tuple[int, int]:
-    """Declared-space coordinate from Claude -> real screen pixels."""
+    """Declared-space coordinate from Claude -> a point on the virtual desktop,
+    inside the controlled monitor."""
     if not coordinate or len(coordinate) != 2:
         raise ValueError("this action needs a [x, y] coordinate")
-    native_w, native_h = pyautogui.size()
+    x0, y0, native_w, native_h = _screen_rect(pyautogui)
     x = round(int(coordinate[0]) * native_w / DISPLAY_WIDTH)
     y = round(int(coordinate[1]) * native_h / DISPLAY_HEIGHT)
     # Clamp: a coordinate slightly outside the declared box is a rounding
     # artefact, not a reason to fail the action.
-    return max(0, min(x, native_w - 1)), max(0, min(y, native_h - 1))
+    return x0 + max(0, min(x, native_w - 1)), y0 + max(0, min(y, native_h - 1))
 
 
 def _to_declared(pyautogui, position) -> tuple[int, int]:
     """Real screen pixels -> declared-space coordinate (inverse of `_to_native`)."""
-    native_w, native_h = pyautogui.size()
-    x = round(int(position[0]) * DISPLAY_WIDTH / native_w)
-    y = round(int(position[1]) * DISPLAY_HEIGHT / native_h)
+    x0, y0, native_w, native_h = _screen_rect(pyautogui)
+    x = round((int(position[0]) - x0) * DISPLAY_WIDTH / native_w)
+    y = round((int(position[1]) - y0) * DISPLAY_HEIGHT / native_h)
     return max(0, min(x, DISPLAY_WIDTH - 1)), max(0, min(y, DISPLAY_HEIGHT - 1))
 
 
@@ -507,26 +568,29 @@ def _grab(pyautogui):
     `ImageGrab.grab()` below skips it — worth having as the first tier, since
     pyscreeze is the layer that historically breaks.
 
-    **Primary monitor only, deliberately.** Pillow offers `all_screens=True`
-    to capture the whole virtual desktop, and it is the wrong choice here: it
-    would silently break the coordinate contract this module exists to keep.
-    `_to_native()` scales Claude's coordinates using `pyautogui.size()`, which
-    reports the *primary* display, so against a two-monitor capture every
-    click would be divided by the wrong width and land on the wrong screen.
-    Supporting multiple monitors properly means teaching `_to_native` the
-    virtual-desktop bounds *and* its origin, which can be negative when a
-    monitor sits left of the primary — a real feature, not a flag flip.
+    **One monitor.** By default the primary monitor, which is what `ImageGrab.grab()`
+    captures and what `pyautogui.size()` measures, so the capture and the
+    coordinate mapping cover the same pixels. When CLAUDE_COMPUTER_MONITOR names
+    another monitor, the capture is that monitor's exact rectangle of the virtual
+    desktop (`all_screens=True` with a bounding box, in desktop coordinates that
+    can be negative), and `_to_native` and `_to_declared` offset by its origin.
 
     Two backends is the whole ladder.
     """
     errors = []
+    x0, y0, width, height = _screen_rect(pyautogui)
+    chosen = bool(os.getenv("CLAUDE_COMPUTER_MONITOR", "").strip())
     try:
         from PIL import ImageGrab
 
+        if chosen:
+            return ImageGrab.grab(bbox=(x0, y0, x0 + width, y0 + height), all_screens=True)
         return ImageGrab.grab()
     except Exception as e:
         errors.append(f"PIL.ImageGrab: {e}")
     try:
+        if chosen:
+            return pyautogui.screenshot(region=(x0, y0, width, height))
         return pyautogui.screenshot()
     except Exception as e:
         errors.append(f"pyautogui: {e}")
