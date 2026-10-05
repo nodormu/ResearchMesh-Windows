@@ -984,6 +984,10 @@ class _AlsaOutput:
             self._seq = None
 
 
+# A SysEx that never ends is dropped once it grows past this many bytes.
+_MAX_SYSEX_BYTES = 64 * 1024 * 1024
+
+
 class _RtMidiInput:
     """An input port opened with rtmidi.MidiIn directly (the "rtmidi"
     backend: CoreMIDI on macOS, WinMM on Windows). mido's rtmidi Input
@@ -991,12 +995,20 @@ class _RtMidiInput:
     (mido.Message.from_bytes on each complete message rtmidi delivers) with
     the filter chosen here. deliver gets (received_at, mido.Message, at_open)
     as _AlsaInput's does; rtmidi reports no queue overflow, so no overflow
-    entries come from this backend."""
+    entries come from this backend.
+
+    WinMM hands a SysEx over one driver buffer at a time (1,024 bytes by
+    default, and python-rtmidi cannot change that), each as its own callback,
+    so a long SysEx arrives in pieces: the first starts with F0 and none but
+    the last ends with F7. They are joined here until the F7. A real-time byte
+    that falls inside a SysEx is delivered on its own, and any other status
+    byte means the SysEx was cut short and the partial one is dropped."""
 
     def __init__(self, port_name: str, deliver, active_sensing: bool) -> None:
         import rtmidi
         from mido.backends.rtmidi_utils import expand_alsa_port_name
 
+        self._partial: bytearray | None = None
         self._rt = rtmidi.MidiIn()
         try:
             names = self._rt.get_ports()
@@ -1018,8 +1030,29 @@ class _RtMidiInput:
         self.name = port_name
 
     def _callback(self, event, _data) -> None:
+        data = bytes(event[0])
+        if not data:
+            return
+        if self._partial is not None:
+            if len(data) == 1 and data[0] >= 0xF8:
+                pass  # a real-time byte inside a SysEx stands alone
+            elif data[0] < 0x80 or data[0] == 0xF7:
+                self._partial += data
+                if data[-1] != 0xF7:
+                    if len(self._partial) > _MAX_SYSEX_BYTES:
+                        self._partial = None
+                    return
+                data, self._partial = bytes(self._partial), None
+            else:
+                self._partial = None  # another message began: the SysEx was cut short
+        elif data[0] == 0xF0 and data[-1] != 0xF7:
+            self._partial = bytearray(data)
+            return
+        self._emit(data)
+
+    def _emit(self, data: bytes) -> None:
         try:
-            msg = mido.Message.from_bytes(event[0])
+            msg = mido.Message.from_bytes(data)
         except ValueError:
             return  # not a complete MIDI message; mido drops these too
         now = time.time()
